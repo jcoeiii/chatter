@@ -39,14 +39,6 @@ namespace chatter
             this.richTextBoxChatIn.Focus();
         }
 
-        private void Sock_SubChanged(object sender, EventArgs e)
-        {
-            this.Invoke((MethodInvoker)delegate
-            {
-                updateSubList((string)sender);
-            });
-        }
-
         private bool isExit = false;
         private string userName;
         private string myIP;
@@ -154,12 +146,6 @@ namespace chatter
             CSavedIPs.ChangeSubList(this.textBoxSubs.Text);
             this.isExit = true;
             Sock.KillTasks();
-        }
-
-        private void updateSubList(string subs)
-        {
-            this.textBoxSubs.Text = subs;
-            buttonGoConnection_Click(null, null);
         }
 
         private void buttonGoConnection_Click(object sender, EventArgs e)

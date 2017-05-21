@@ -24,7 +24,7 @@ namespace chatter
         static private string subsList;
         static private string myIP;
         static private string myPCName;
-        static private Dictionary<string, string> ipBuddies = new Dictionary<string, string>();
+        static private Dictionary<string, string> ipBuddyMessages = new Dictionary<string, string>();
         static private List<string> ipsInUse = new List<string>();
 
         static public event NewDataReceivedEventHandler NewData;
@@ -168,10 +168,10 @@ namespace chatter
                         OnNewDataReceived(mea);
                     }
 
-                    if (waitingCount <= 0 && ipBuddies.ContainsKey(buddyIp) && ipBuddies[buddyIp] != "")
+                    if (waitingCount <= 0 && ipBuddyMessages.ContainsKey(buddyIp) && ipBuddyMessages[buddyIp] != "")
                     {
-                        m.AddMessageToSend(ipBuddies[buddyIp]);
-                        ipBuddies[buddyIp] = "";
+                        m.AddMessageToSend(ipBuddyMessages[buddyIp]);
+                        ipBuddyMessages[buddyIp] = "";
                     }
 
                     CMessageHandler.MsgState state = m.ProcessStates();
@@ -215,11 +215,11 @@ namespace chatter
                 if (ipsInUse.Contains(buddyIp))
                     ipsInUse.Remove(buddyIp);
             }
-            lock (ipBuddies)
-            {
-                if (ipBuddies.ContainsKey(buddyIp))
-                    ipBuddies.Remove(buddyIp);
-            }
+            //lock (ipBuddyMessages)
+            //{
+            //    if (ipBuddyMessages.ContainsKey(buddyIp))
+            //        ipBuddyMessages.Remove(buddyIp);
+            //}
 
             endThread();
         }
@@ -326,10 +326,10 @@ namespace chatter
                     if (timeout >= 7)
                         break;
 
-                    if (ipBuddies.ContainsKey(buddyIp) && ipBuddies[buddyIp] != "")
+                    if (ipBuddyMessages.ContainsKey(buddyIp) && ipBuddyMessages[buddyIp] != "")
                     {
-                        m.AddMessageToSend(ipBuddies[buddyIp]);
-                        ipBuddies[buddyIp] = "";
+                        m.AddMessageToSend(ipBuddyMessages[buddyIp]);
+                        ipBuddyMessages[buddyIp] = "";
                     }
 
                     CMessageHandler.MsgState state = m.ProcessStates();
@@ -372,11 +372,11 @@ namespace chatter
                 if (ipsInUse.Contains(buddyIp))
                     ipsInUse.Remove(buddyIp);
             }
-            lock (ipBuddies)
-            {
-                if (ipBuddies.ContainsKey(buddyIp))
-                    ipBuddies.Remove(buddyIp);
-            }
+            //lock (ipBuddyMessages)
+            //{
+            //    if (ipBuddyMessages.ContainsKey(buddyIp))
+            //        ipBuddyMessages.Remove(buddyIp);
+            //}
 
             endThread();
         }
@@ -389,19 +389,19 @@ namespace chatter
 #endif
             string fullMsg = CMessageHandler.GenerateMessage(myName, myIP, msg);
 
-            if (client != null && !ipBuddies.ContainsKey(buddyIp))
+            if (client != null && !ipBuddyMessages.ContainsKey(buddyIp))
             {
                 // this is a new connection!
                 lock (buddyIp)
                 {
-                    ipBuddies[buddyIp] = fullMsg;
+                    ipBuddyMessages[buddyIp] = fullMsg;
                 }
                 Task.Factory.StartNew(() => StartClientSide(buddyIp));
             }
             else
             {
-                if (ipBuddies.ContainsKey(buddyIp))
-                    ipBuddies[buddyIp] = fullMsg;
+                if (ipsInUse.Contains(buddyIp))
+                    ipBuddyMessages[buddyIp] = fullMsg;
                 else
                     return false;
             }
@@ -474,7 +474,7 @@ namespace chatter
 #if DEBUG_LOOPBACK
                             if (!ipBuddies.ContainsKey(ipp))
 #else
-                            if (ipp != myIP && !ipBuddies.ContainsKey(ipp))
+                            if (ipp != myIP && !ipBuddyMessages.ContainsKey(ipp))
 #endif
                             {
                                 var result = tcpClient.BeginConnect(ipp, Convert.ToInt32(Port), null, null);

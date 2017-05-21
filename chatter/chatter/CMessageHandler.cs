@@ -43,20 +43,16 @@ namespace chatter
 
                     if (mea.Valid)
                     {
-                        //if (this._state == MsgState.WaitingResponse)
-                        //{
                         // this was a reply ACK
                         if (currentId == mea.Id)
                         {
-                            currentId = "";
-                            this._state = MsgState.Idle;
+                            //currentId = "";
                             return null; // don't send a repeat back to the user
                         }
-                        //}
 
                         _lastRecvedMsg = localMsg;
 
-                        if (this._state == MsgState.Idle)
+                        if (this._state != MsgState.ReadyForRemote)
                             this._state = MsgState.AppendAck;
 
                         currentId = mea.Id;

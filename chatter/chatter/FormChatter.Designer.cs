@@ -169,7 +169,7 @@
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.SizableToolWindow;
             this.Margin = new System.Windows.Forms.Padding(2);
             this.Name = "Chatter";
-            this.Text = "Chatter V1.4.5";
+            this.Text = "Chatter V1.4.6";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Chatter_FormClosing);
             this.groupBoxTop.ResumeLayout(false);
             this.groupBoxTop.PerformLayout();
