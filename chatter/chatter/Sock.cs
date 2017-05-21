@@ -25,6 +25,7 @@ namespace chatter
         static private string myIP;
         static private string myPCName;
         static private Dictionary<string, string> ipBuddyMessages = new Dictionary<string, string>();
+        static private Dictionary<string, string> ipBuddyFullNameLookup = new Dictionary<string, string>();
         static private List<string> ipsInUse = new List<string>();
 
         static public event NewDataReceivedEventHandler NewData;
@@ -165,10 +166,11 @@ namespace chatter
                     MessageEventArgs mea = m.PumpMessageFromRemote(bytes, bytesRec);
                     if (mea != null)
                     {
+                        ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
                         OnNewDataReceived(mea);
                     }
 
-                    if (waitingCount <= 0 && ipBuddyMessages.ContainsKey(buddyIp) && ipBuddyMessages[buddyIp] != "")
+                    if (waitingCount <= 0 && !String.IsNullOrEmpty(ipBuddyMessages[buddyIp]))
                     {
                         m.AddMessageToSend(ipBuddyMessages[buddyIp]);
                         ipBuddyMessages[buddyIp] = "";
@@ -314,6 +316,7 @@ namespace chatter
 
                         if (mea != null)
                         {
+                            ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
                             OnNewDataReceived(mea);
                         }
                         //}
@@ -326,7 +329,7 @@ namespace chatter
                     if (timeout >= 7)
                         break;
 
-                    if (ipBuddyMessages.ContainsKey(buddyIp) && ipBuddyMessages[buddyIp] != "")
+                    if (!String.IsNullOrEmpty(ipBuddyMessages[buddyIp]))
                     {
                         m.AddMessageToSend(ipBuddyMessages[buddyIp]);
                         ipBuddyMessages[buddyIp] = "";
@@ -381,7 +384,7 @@ namespace chatter
             endThread();
         }
 
-        static public bool SendToBuddy(string myName, TcpClient client, string buddyIp, string msg)
+        static public bool SendToBuddy(string myName, TcpClient client, string buddyIp, string buddyFullName, string msg)
         {
 #if !DEBUG_LOOPBACK
             if (buddyIp == myIP)
@@ -392,10 +395,10 @@ namespace chatter
             if (client != null && !ipBuddyMessages.ContainsKey(buddyIp))
             {
                 // this is a new connection!
-                lock (buddyIp)
-                {
-                    ipBuddyMessages[buddyIp] = fullMsg;
-                }
+                ipBuddyMessages[buddyIp] = fullMsg;
+                if (!String.IsNullOrEmpty(buddyFullName))
+                    ipBuddyFullNameLookup[buddyIp] = buddyFullName;
+
                 Task.Factory.StartNew(() => StartClientSide(buddyIp));
             }
             else
@@ -403,7 +406,11 @@ namespace chatter
                 if (ipsInUse.Contains(buddyIp))
                     ipBuddyMessages[buddyIp] = fullMsg;
                 else
-                    return false;
+                {
+                    // try to restart connection if possible!
+                    Task.Factory.StartNew(() => StartClientSide(buddyIp));
+                    return false; // signal that this message did not go thru
+                }
             }
             return true;
         }
@@ -474,7 +481,7 @@ namespace chatter
 #if DEBUG_LOOPBACK
                             if (!ipBuddies.ContainsKey(ipp))
 #else
-                            if (ipp != myIP && !ipBuddyMessages.ContainsKey(ipp))
+                            if (ipp != myIP && !ipsInUse.Contains(ipp))
 #endif
                             {
                                 var result = tcpClient.BeginConnect(ipp, Convert.ToInt32(Port), null, null);
@@ -482,7 +489,7 @@ namespace chatter
                                 if (result.AsyncWaitHandle.WaitOne(800))
                                 {
                                     // found a buddy, send message
-                                    SendToBuddy(myPCName, tcpClient, ipp, "Connected!");
+                                    SendToBuddy(myPCName, tcpClient, ipp, "", "Connected!");
                                     CSavedIPs.AppendIP(ipp);
                                 }
                             }

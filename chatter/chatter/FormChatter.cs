@@ -18,7 +18,7 @@ namespace chatter
 
             CSavedIPs.ReadFile();
 
-            //this.textBoxSubs.Text = CSavedIPs.Subs;
+            this.comboBoxUsers.SelectedIndex = 0;
 
             userName = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
             this.groupBoxTop.Text = "Name: " + userName;
@@ -42,7 +42,7 @@ namespace chatter
         private bool isExit = false;
         private string userName;
         private string myIP;
-        private List<string> buddyList = new List<string>();
+        private Dictionary<string, string> buddyList = new Dictionary<string, string>();
 
         public void EnableGoButton()
         {
@@ -64,17 +64,17 @@ namespace chatter
                 {
                     if (this.comboBoxUsers.Items.Contains(e.FriendName))
                     {
-                        int index = this.comboBoxUsers.Items.IndexOf(e.FriendName);
-                        if (index > -1)
-                            this.comboBoxUsers.SelectedIndex = index;
+                    //    int index = this.comboBoxUsers.Items.IndexOf(e.FriendName);
+                    //    if (index > -1)
+                    //        this.comboBoxUsers.SelectedIndex = index;
                     }
                     else
                     {
                         this.comboBoxUsers.Items.Add(e.FriendName);
-                        this.buddyList.Add(e.FriendIP);
+                        this.buddyList[e.FriendName] = e.FriendIP;
 
                         // auto select combo only if first buddy found
-                        if (this.comboBoxUsers.Items.Count <= 1)
+                        if (this.comboBoxUsers.Items.Count <= 2)
                         {
                             int index = this.comboBoxUsers.Items.IndexOf(e.FriendName);
                             if (index > -1)
@@ -107,19 +107,22 @@ namespace chatter
         {
             if (e.KeyChar.Equals((char)Keys.Enter))
             {
-                //this.richTextBoxChatIn.Text = "";
+                string m = this.richTextBoxChatIn.Text.Substring(0, this.richTextBoxChatIn.Text.Length - 1);
 
-                if (this.comboBoxUsers.Text == "")
+                if (this.comboBoxUsers.Items.Count == 1)
                 {
-                    //richTextBoxChatIn.Text = message;
-                    MessageBox.Show(this, "Either no friends found or selected.");
+                    appendText(richTextBoxChatOut, "No friends can be found." + Environment.NewLine, Color.LightGreen);
+                    // scroll it automatically
+                    richTextBoxChatIn.Text = m;
+                    richTextBoxChatIn.SelectionStart = richTextBoxChatIn.Text.Length;
+                    richTextBoxChatIn.ScrollToCaret();
                     return;
                 }
 
-                string m = this.richTextBoxChatIn.Text.Substring(0, this.richTextBoxChatIn.Text.Length - 1);
+                string buddyName = this.comboBoxUsers.Text;
 
-                // ready to send message to a friend
-                if (!Sock.SendToBuddy(userName, null, buddyList[this.comboBoxUsers.SelectedIndex], m))
+                // ready to send message to a buddy
+                if (this.comboBoxUsers.SelectedIndex != 0 && !Sock.SendToBuddy(userName, null, buddyList[buddyName], buddyName, m))
                 {
                     appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
                     appendText(richTextBoxChatOut, m + " <remote ignored>" + Environment.NewLine, Color.LightSalmon);
@@ -138,6 +141,13 @@ namespace chatter
                 }
 
                 this.richTextBoxChatIn.Text = "";
+
+                // send message to each buddy
+                if (this.comboBoxUsers.SelectedIndex == 0)
+                {
+                    foreach (string key in this.buddyList.Keys)
+                        Sock.SendToBuddy(userName, null, buddyList[key], key, m);
+                }
             }
         }
 
@@ -164,9 +174,9 @@ namespace chatter
 
         private void buttonConnect_Click(object sender, EventArgs e)
         {
-            if (this.comboBoxUsers.Items.Count > 0)
+            if (this.comboBoxUsers.SelectedIndex != 0)
             {
-                Sock.SendToBuddy(userName, null, buddyList[this.comboBoxUsers.SelectedIndex], "Reconnected!");
+                Sock.SendToBuddy(userName, null, buddyList[this.comboBoxUsers.Text], this.comboBoxUsers.Text, "Reconnected!");
             }
         }
     }

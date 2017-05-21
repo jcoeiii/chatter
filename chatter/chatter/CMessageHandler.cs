@@ -76,14 +76,13 @@ namespace chatter
                 case MsgState.Idle:
                     if (this._msgs2Send.Count > 0)
                     {
-                        //this._msg2Go = this._msgs2Send[0];
                         lock (this._msgs2Send)
                         {
                             this._msg2Go = this._msgs2Send[0];
                             this._msgs2Send.RemoveAt(0);
                         }
-                        MessageEventArgs mea = new MessageEventArgs(this._msg2Go);
-                        this.currentId = mea.Id;
+                        //MessageEventArgs mea = new MessageEventArgs(this._msg2Go);
+                        //this.currentId = mea.Id;
 
                         this._state = MsgState.ReadyForRemote;
                     }
@@ -106,7 +105,7 @@ namespace chatter
                     // message was already sent out, check timeout
                     DateTime endTime = DateTime.Now;
                     TimeSpan total = endTime.Subtract(this._startTime);
-                    if (total.Milliseconds >= 400) // ~5 sec
+                    if (total.Milliseconds >= 400)
                     {
                         this._waitingForResponse = false;
                         this._state = MsgState.ReadyForRemote;

@@ -87,6 +87,8 @@
             // 
             this.comboBoxUsers.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboBoxUsers.FormattingEnabled = true;
+            this.comboBoxUsers.Items.AddRange(new object[] {
+            "All Users"});
             this.comboBoxUsers.Location = new System.Drawing.Point(180, 21);
             this.comboBoxUsers.Margin = new System.Windows.Forms.Padding(2);
             this.comboBoxUsers.Name = "comboBoxUsers";
@@ -169,7 +171,7 @@
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.SizableToolWindow;
             this.Margin = new System.Windows.Forms.Padding(2);
             this.Name = "Chatter";
-            this.Text = "Chatter V1.4.6";
+            this.Text = "Chatter V1.5.0";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Chatter_FormClosing);
             this.groupBoxTop.ResumeLayout(false);
             this.groupBoxTop.PerformLayout();
