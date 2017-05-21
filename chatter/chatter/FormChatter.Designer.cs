@@ -32,7 +32,7 @@
             this.buttonConnect = new System.Windows.Forms.Button();
             this.buttonGoConnection = new System.Windows.Forms.Button();
             this.comboBoxUsers = new System.Windows.Forms.ComboBox();
-            this.textBoxPort = new System.Windows.Forms.TextBox();
+            this.textBoxSubs = new System.Windows.Forms.TextBox();
             this.groupBoxBottom = new System.Windows.Forms.GroupBox();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
             this.richTextBoxChatOut = new System.Windows.Forms.RichTextBox();
@@ -50,12 +50,12 @@
             this.groupBoxTop.Controls.Add(this.buttonConnect);
             this.groupBoxTop.Controls.Add(this.buttonGoConnection);
             this.groupBoxTop.Controls.Add(this.comboBoxUsers);
-            this.groupBoxTop.Controls.Add(this.textBoxPort);
+            this.groupBoxTop.Controls.Add(this.textBoxSubs);
             this.groupBoxTop.Dock = System.Windows.Forms.DockStyle.Top;
             this.groupBoxTop.Location = new System.Drawing.Point(0, 0);
-            this.groupBoxTop.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.groupBoxTop.Margin = new System.Windows.Forms.Padding(2);
             this.groupBoxTop.Name = "groupBoxTop";
-            this.groupBoxTop.Padding = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.groupBoxTop.Padding = new System.Windows.Forms.Padding(2);
             this.groupBoxTop.Size = new System.Drawing.Size(396, 50);
             this.groupBoxTop.TabIndex = 0;
             this.groupBoxTop.TabStop = false;
@@ -63,8 +63,8 @@
             // 
             // buttonConnect
             // 
-            this.buttonConnect.Location = new System.Drawing.Point(252, 20);
-            this.buttonConnect.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.buttonConnect.Location = new System.Drawing.Point(328, 21);
+            this.buttonConnect.Margin = new System.Windows.Forms.Padding(2);
             this.buttonConnect.Name = "buttonConnect";
             this.buttonConnect.Size = new System.Drawing.Size(59, 19);
             this.buttonConnect.TabIndex = 3;
@@ -74,8 +74,8 @@
             // 
             // buttonGoConnection
             // 
-            this.buttonGoConnection.Location = new System.Drawing.Point(55, 20);
-            this.buttonGoConnection.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.buttonGoConnection.Location = new System.Drawing.Point(131, 21);
+            this.buttonGoConnection.Margin = new System.Windows.Forms.Padding(2);
             this.buttonGoConnection.Name = "buttonGoConnection";
             this.buttonGoConnection.Size = new System.Drawing.Size(45, 19);
             this.buttonGoConnection.TabIndex = 2;
@@ -87,30 +87,29 @@
             // 
             this.comboBoxUsers.DropDownStyle = System.Windows.Forms.ComboBoxStyle.DropDownList;
             this.comboBoxUsers.FormattingEnabled = true;
-            this.comboBoxUsers.Location = new System.Drawing.Point(104, 20);
-            this.comboBoxUsers.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.comboBoxUsers.Location = new System.Drawing.Point(180, 21);
+            this.comboBoxUsers.Margin = new System.Windows.Forms.Padding(2);
             this.comboBoxUsers.Name = "comboBoxUsers";
             this.comboBoxUsers.Size = new System.Drawing.Size(144, 21);
             this.comboBoxUsers.TabIndex = 1;
             // 
-            // textBoxPort
+            // textBoxSubs
             // 
-            this.textBoxPort.Location = new System.Drawing.Point(9, 21);
-            this.textBoxPort.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
-            this.textBoxPort.Name = "textBoxPort";
-            this.textBoxPort.Size = new System.Drawing.Size(42, 20);
-            this.textBoxPort.TabIndex = 0;
-            this.textBoxPort.Text = "10.0";
-            this.textBoxPort.TextChanged += new System.EventHandler(this.textBoxPort_TextChanged);
+            this.textBoxSubs.Location = new System.Drawing.Point(9, 21);
+            this.textBoxSubs.Margin = new System.Windows.Forms.Padding(2);
+            this.textBoxSubs.Name = "textBoxSubs";
+            this.textBoxSubs.Size = new System.Drawing.Size(118, 20);
+            this.textBoxSubs.TabIndex = 0;
+            this.textBoxSubs.TextChanged += new System.EventHandler(this.textBoxPort_TextChanged);
             // 
             // groupBoxBottom
             // 
             this.groupBoxBottom.Controls.Add(this.splitContainer1);
             this.groupBoxBottom.Dock = System.Windows.Forms.DockStyle.Fill;
             this.groupBoxBottom.Location = new System.Drawing.Point(0, 50);
-            this.groupBoxBottom.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.groupBoxBottom.Margin = new System.Windows.Forms.Padding(2);
             this.groupBoxBottom.Name = "groupBoxBottom";
-            this.groupBoxBottom.Padding = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.groupBoxBottom.Padding = new System.Windows.Forms.Padding(2);
             this.groupBoxBottom.Size = new System.Drawing.Size(396, 228);
             this.groupBoxBottom.TabIndex = 1;
             this.groupBoxBottom.TabStop = false;
@@ -140,7 +139,7 @@
             this.richTextBoxChatOut.Dock = System.Windows.Forms.DockStyle.Fill;
             this.richTextBoxChatOut.ForeColor = System.Drawing.Color.LightGreen;
             this.richTextBoxChatOut.Location = new System.Drawing.Point(0, 0);
-            this.richTextBoxChatOut.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.richTextBoxChatOut.Margin = new System.Windows.Forms.Padding(2);
             this.richTextBoxChatOut.Name = "richTextBoxChatOut";
             this.richTextBoxChatOut.ReadOnly = true;
             this.richTextBoxChatOut.Size = new System.Drawing.Size(392, 134);
@@ -153,7 +152,7 @@
             this.richTextBoxChatIn.Dock = System.Windows.Forms.DockStyle.Fill;
             this.richTextBoxChatIn.ForeColor = System.Drawing.SystemColors.ActiveCaptionText;
             this.richTextBoxChatIn.Location = new System.Drawing.Point(0, 0);
-            this.richTextBoxChatIn.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.richTextBoxChatIn.Margin = new System.Windows.Forms.Padding(2);
             this.richTextBoxChatIn.Name = "richTextBoxChatIn";
             this.richTextBoxChatIn.Size = new System.Drawing.Size(392, 73);
             this.richTextBoxChatIn.TabIndex = 0;
@@ -168,7 +167,7 @@
             this.Controls.Add(this.groupBoxBottom);
             this.Controls.Add(this.groupBoxTop);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.SizableToolWindow;
-            this.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.Margin = new System.Windows.Forms.Padding(2);
             this.Name = "Chatter";
             this.Text = "Chatter V1.4.5";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Chatter_FormClosing);
@@ -187,7 +186,7 @@
 
         private System.Windows.Forms.GroupBox groupBoxTop;
         private System.Windows.Forms.ComboBox comboBoxUsers;
-        private System.Windows.Forms.TextBox textBoxPort;
+        private System.Windows.Forms.TextBox textBoxSubs;
         private System.Windows.Forms.GroupBox groupBoxBottom;
         private System.Windows.Forms.RichTextBox richTextBoxChatOut;
         private System.Windows.Forms.Button buttonGoConnection;

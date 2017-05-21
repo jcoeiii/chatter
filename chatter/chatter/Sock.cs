@@ -79,17 +79,12 @@ namespace chatter
             threadRunningCount--;
         }
 
-        static private void StartListening()
+        static private void StartListening(IPHostEntry ipHostInfo)
         {
             while (stayAlive)
             {
                 try
                 {
-                    // Establish the local endpoint for the socket.  
-                    // Dns.GetHostName returns the name of the   
-                    // host running the application.
-                    string hostName = Dns.GetHostName();
-                    IPHostEntry ipHostInfo = Dns.Resolve(hostName); // obsolete but it works
                     IPAddress ipAddress = ipHostInfo.AddressList[0];
                     IPEndPoint localEndPoint = new IPEndPoint(ipAddress, Port);
 
@@ -145,11 +140,13 @@ namespace chatter
                 CMessageHandler m = new CMessageHandler();
                 int timeout = 0;
 
+#if !DEBUG_LOOPBACK
                 if (!checkForRunningThread(buddyIp))
                 {
                     endThread();
                     return;
                 }
+#endif
 
                 // An incoming connection needs to be processed.  
                 while (stayAlive)
@@ -182,7 +179,7 @@ namespace chatter
                     // Write to Client as needed
                     if (state == CMessageHandler.MsgState.ReadyForRemote)
                     {
-                        m.InjectTestMessage(";S" + timeout);
+                        //m.InjectTestMessage(";S" + timeout);
 
                         byte[] msg = m.MessageReady;
                         // Send back a response.
@@ -227,9 +224,33 @@ namespace chatter
             endThread();
         }
 
-        static public void StartServer()
+        static public string StartServer()
         {
-            Task.Factory.StartNew(() => StartListening());
+            // Establish the local endpoint for the socket.  
+            // Dns.GetHostName returns the name of the   
+            // host running the application.
+            string hostName = Dns.GetHostName();
+            IPHostEntry ipHostInfo = Dns.Resolve(hostName); // obsolete but it works
+
+            if (CSavedIPs.Subs == "")
+            {
+                string subs = "";
+                foreach (IPAddress i in ipHostInfo.AddressList)
+                {
+                    if (subs != "")
+                        subs += ",";
+                    string ip = i.ToString();
+                    int loc = ip.IndexOf('.');
+                    loc = ip.IndexOf('.', loc + 1);
+                    loc = ip.IndexOf('.', loc + 1);
+                    subs += ip.Substring(0, loc);
+                }
+                CSavedIPs.ChangeSubList(subs);
+            }
+
+            Task.Factory.StartNew(() => StartListening(ipHostInfo));
+
+            return CSavedIPs.Subs;
         }
 
         static private bool checkForRunningThread(string buddyIp)
@@ -250,7 +271,7 @@ namespace chatter
             return justAdded;
         }
 
-        static public void StartClientSide(string buddyIp, string firstMsg)
+        static public void StartClientSide(string buddyIp)
         {
             beginThread();
 
@@ -262,11 +283,13 @@ namespace chatter
                 // Buffer for reading data
                 Byte[] bytes;
 
+#if !DEBUG_LOOPBACK
                 if (!checkForRunningThread(buddyIp))
                 {
                     endThread();
                     return;
                 }
+#endif
 
                 client = new TcpClient(buddyIp, Port);
                 NetworkStream stream = client.GetStream();
@@ -295,7 +318,7 @@ namespace chatter
                         }
                         //}
                     }
-                    catch (IOException e)
+                    catch (IOException)
                     {
                         timeout++;
                     }
@@ -314,7 +337,7 @@ namespace chatter
                     // Write to Client as needed
                     if (state == CMessageHandler.MsgState.ReadyForRemote)
                     {
-                        m.InjectTestMessage(":C" + timeout);
+                        //m.InjectTestMessage(":C" + timeout);
 
                         byte[] msg = m.MessageReady;
                         // Send back a response.
@@ -362,7 +385,7 @@ namespace chatter
         {
 #if !DEBUG_LOOPBACK
             if (buddyIp == myIP)
-                return true; // just ingore this situation
+                return true; // just ignore this situation
 #endif
             string fullMsg = CMessageHandler.GenerateMessage(myName, myIP, msg);
 
@@ -373,7 +396,7 @@ namespace chatter
                 {
                     ipBuddies[buddyIp] = fullMsg;
                 }
-                Task.Factory.StartNew(() => StartClientSide(buddyIp, fullMsg));
+                Task.Factory.StartNew(() => StartClientSide(buddyIp));
             }
             else
             {
@@ -408,24 +431,19 @@ namespace chatter
                 beginThread();
 
                 string[] octs = myIP.Split(new char[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
-                string[] subs = subsList.Split(',');
-                List<int> subsToUse = new List<int>();
-
-                foreach (string s in subs)
-                    subsToUse.Add(Convert.ToInt32(s));
+                string[] subsToUse = subsList.Split(',');
 
                 int theSubIndex = 0;
 
-                int subMe = Convert.ToInt32(octs[2]);
                 int subsubMe = Convert.ToInt32(octs[3]);
 
-                int subStart = subsToUse[theSubIndex++];
+                string subPart = subsToUse[theSubIndex++];
                 int subsubStart = 2;
 
 #if DEBUG_LOOPBACK
                 subsubStart = subsubMe - 1; // give it a little more time
 #endif
-                string ipp= "";
+                string ipp = "";
                 int index = 0;
                 bool usingPreviousList = true;
                 int counts = 0;
@@ -451,7 +469,7 @@ namespace chatter
                             
                             if (!usingPreviousList)
                             {
-                                ipp = octs[0] + "." + octs[1] + "." + subStart + "." + subsubStart;
+                                ipp = subPart + "." + subsubStart;
                             }
 #if DEBUG_LOOPBACK
                             if (!ipBuddies.ContainsKey(ipp))
@@ -488,9 +506,9 @@ namespace chatter
                             {
                                 subsubStart = 2;
 
-                                if (theSubIndex >= subsToUse.Count)
+                                if (theSubIndex >= subsToUse.Count())
                                     break; // stop searching!
-                                subStart = subsToUse[theSubIndex++];
+                                subPart = subsToUse[theSubIndex++];
                             }
 
                             

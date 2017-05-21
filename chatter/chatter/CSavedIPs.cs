@@ -11,7 +11,7 @@ namespace chatter
     public class CSavedIPs
     {
         static public List<string> PreviousIPList = new List<string>();
-        static public string Subs = "197,196";
+        static public string Subs = "";
 
         static public void ChangeSubList(string subs)
         {

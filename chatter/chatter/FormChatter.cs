@@ -18,25 +18,33 @@ namespace chatter
 
             CSavedIPs.ReadFile();
 
-            this.textBoxPort.Text = CSavedIPs.Subs;
-
-            // test code remove later
-            //this.textBoxPort.Text = "0";
+            //this.textBoxSubs.Text = CSavedIPs.Subs;
 
             userName = System.Security.Principal.WindowsIdentity.GetCurrent().Name;
             this.groupBoxTop.Text = "Name: " + userName;
 
-            Sock.NewData += Sock_NewDataReceivedEventHandler;
-            myIP = Sock.GetIPAddress("10.");
-            this.groupBoxBottom.Text = "My IP: " + myIP;
+            this.textBoxSubs.Text = Sock.StartServer();
 
-            Sock.StartServer();
+            string[] split = this.textBoxSubs.Text.Split(',');
+            string ipFirst = (split != null && split.Count() > 0) ? split[0] : "10.0.0";
+
+            Sock.NewData += Sock_NewDataReceivedEventHandler;
+            myIP = Sock.GetIPAddress(ipFirst);
+            this.groupBoxBottom.Text = "My IP: " + myIP;
 
             buttonGoConnection_Click(null, null);
 
             this.richTextBoxChatIn.Select();
             this.richTextBoxChatIn.SelectionStart = 0;
             this.richTextBoxChatIn.Focus();
+        }
+
+        private void Sock_SubChanged(object sender, EventArgs e)
+        {
+            this.Invoke((MethodInvoker)delegate
+            {
+                updateSubList((string)sender);
+            });
         }
 
         private bool isExit = false;
@@ -143,15 +151,21 @@ namespace chatter
 
         private void Chatter_FormClosing(object sender, FormClosingEventArgs e)
         {
-            CSavedIPs.ChangeSubList(this.textBoxPort.Text);
+            CSavedIPs.ChangeSubList(this.textBoxSubs.Text);
             this.isExit = true;
             Sock.KillTasks();
         }
 
+        private void updateSubList(string subs)
+        {
+            this.textBoxSubs.Text = subs;
+            buttonGoConnection_Click(null, null);
+        }
+
         private void buttonGoConnection_Click(object sender, EventArgs e)
         {
-            CSavedIPs.ChangeSubList(this.textBoxPort.Text);
-            Sock.SetSock(this.userName, this.myIP, this.textBoxPort.Text);
+            CSavedIPs.ChangeSubList(this.textBoxSubs.Text);
+            Sock.SetSock(this.userName, this.myIP, this.textBoxSubs.Text);
             Sock.StartSearching(this);
             appendText(richTextBoxChatOut, "Searching..." + Environment.NewLine, Color.LightGreen);
             this.buttonGoConnection.Enabled = false;
