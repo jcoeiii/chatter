@@ -126,9 +126,11 @@ namespace chatter
                 {
                     appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
                     appendText(richTextBoxChatOut, m + " <remote ignored>" + Environment.NewLine, Color.LightSalmon);
-                    //richTextBoxChatOut.SelectionStart = richTextBoxChatOut.Text.Length;
+
                     // scroll it automatically
-                    richTextBoxChatOut.ScrollToCaret();
+                    richTextBoxChatIn.Text = m;
+                    richTextBoxChatIn.SelectionStart = richTextBoxChatIn.Text.Length;
+                    richTextBoxChatIn.ScrollToCaret();
                     return;
                 }
                 else
@@ -178,6 +180,21 @@ namespace chatter
             {
                 Sock.SendToBuddy(userName, null, buddyList[this.comboBoxUsers.Text], this.comboBoxUsers.Text, "Reconnected!");
             }
+        }
+
+        public void InjectTestMessage(string msg)
+        {
+            this.Invoke((MethodInvoker)delegate
+            {
+                if (!isExit)
+                {
+                    appendText(richTextBoxChatOut, "Debug:\t\t", Color.LightGreen);
+                }
+                if (!isExit)
+                {
+                    appendText(richTextBoxChatOut, msg + Environment.NewLine, Color.LightGray);
+                }
+            });
         }
     }
 }

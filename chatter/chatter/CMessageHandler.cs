@@ -14,6 +14,7 @@ namespace chatter
         private bool _waitingForResponse = false;
         private bool _lastWasAck = false;
         private string _msg2Go = "";
+        private int _attempt = 0;
         private List<string> _msgs2Send = new List<string>();
         private StringBuilder _buildMsg = new StringBuilder();
         private string _lastRecvedMsg = "";
@@ -46,16 +47,25 @@ namespace chatter
                         // this was a reply ACK
                         if (currentId == mea.Id)
                         {
-                            //currentId = "";
-                            return null; // don't send a repeat back to the user
+                            Sock.debug("ACK:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
+                            mea = null; // don't send a repeat back to the user
                         }
+                        else
+                        {
+                            _lastRecvedMsg = localMsg;
 
-                        _lastRecvedMsg = localMsg;
-
-                        if (this._state != MsgState.ReadyForRemote)
-                            this._state = MsgState.AppendAck;
-
-                        currentId = mea.Id;
+                            if (this._state == MsgState.Idle)
+                            {
+                                Sock.debug("Msg:was idle now AppendAck:Current=" + currentId + ":Id=" + mea.Id);
+                                currentId = mea.Id;
+                                this._state = MsgState.AppendAck;
+                            }
+                            else
+                            {
+                                Sock.debug("Msg:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
+                                currentId = mea.Id;
+                            }
+                        }
                         return mea;
                     }
                     //else
@@ -80,10 +90,10 @@ namespace chatter
                         {
                             this._msg2Go = this._msgs2Send[0];
                             this._msgs2Send.RemoveAt(0);
+                            this._attempt = 0;
+                            if (!this._lastWasAck)
+                                this.currentId = "";
                         }
-                        //MessageEventArgs mea = new MessageEventArgs(this._msg2Go);
-                        //this.currentId = mea.Id;
-
                         this._state = MsgState.ReadyForRemote;
                     }
                     break;
@@ -98,6 +108,11 @@ namespace chatter
                         }
                         else
                             this._state = MsgState.WaitingResponse;
+                    }
+                    this._attempt++;
+                    if (this._attempt >= 3)
+                    {
+                        this._state = MsgState.Idle;
                     }
                     break;
 

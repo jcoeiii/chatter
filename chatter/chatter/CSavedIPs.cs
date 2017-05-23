@@ -23,7 +23,10 @@ namespace chatter
         {
             if (!PreviousIPList.Contains(ip))
             {
-                PreviousIPList.Add(ip);
+                lock (PreviousIPList)
+                {
+                    PreviousIPList.Add(ip);
+                }
                 UpdateFile();
             }
         }

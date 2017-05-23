@@ -117,6 +117,7 @@ namespace chatter
 #endif
                         if (last == buddyIp)
                         {
+                            debug("SSListener started for " + buddyIp);
                             Task.Factory.StartNew(() => StartServerSide(handler, buddyIp));
                             last = "";
                         }
@@ -134,20 +135,23 @@ namespace chatter
             beginThread();
 
             byte[] bytes;
-            int waitingCount = 0;
+            int waitingCount = 7;
 
             try
             {
                 CMessageHandler m = new CMessageHandler();
                 int timeout = 0;
 
-#if !DEBUG_LOOPBACK
+//#if !DEBUG_LOOPBACK
                 if (!checkForRunningThread(buddyIp))
                 {
                     endThread();
                     return;
                 }
-#endif
+                //#endif
+
+                if (!ipBuddyMessages.ContainsKey(buddyIp))
+                    ipBuddyMessages[buddyIp] = "";
 
                 // An incoming connection needs to be processed.  
                 while (stayAlive)
@@ -161,7 +165,10 @@ namespace chatter
                         timeout = 0;
 
                     if (timeout >= 7)
+                    {
+                        debug("Server timedout for " + buddyIp);
                         break;
+                    }
 
                     MessageEventArgs mea = m.PumpMessageFromRemote(bytes, bytesRec);
                     if (mea != null)
@@ -181,7 +188,10 @@ namespace chatter
                     // Write to Client as needed
                     if (state == CMessageHandler.MsgState.ReadyForRemote)
                     {
-                        //m.InjectTestMessage(";S" + timeout);
+#if (DEBUG)
+                        m.InjectTestMessage(";S" + timeout);
+#endif
+                        debug("Server sent out msg to " + buddyIp);
 
                         byte[] msg = m.MessageReady;
                         // Send back a response.
@@ -197,11 +207,14 @@ namespace chatter
                     if (waitingCount > 0)
                         waitingCount--;
 
-                    Thread.Sleep(300);
+                    Thread.Sleep(500);
+                    CSavedIPs.AppendIP(buddyIp);
                 }
             }
-            catch //(Exception e)
-            { }
+            catch (Exception e)
+            {
+                debug("Server exception for " + buddyIp + e.ToString());
+            }
 
             if (handler != null)
             {
@@ -292,6 +305,8 @@ namespace chatter
                     return;
                 }
 #endif
+                if (!ipBuddyMessages.ContainsKey(buddyIp))
+                    ipBuddyMessages[buddyIp] = "";
 
                 client = new TcpClient(buddyIp, Port);
                 NetworkStream stream = client.GetStream();
@@ -327,7 +342,10 @@ namespace chatter
                     }
 
                     if (timeout >= 7)
+                    {
+                        debug("Client timedout for " + buddyIp);
                         break;
+                    }
 
                     if (!String.IsNullOrEmpty(ipBuddyMessages[buddyIp]))
                     {
@@ -340,7 +358,10 @@ namespace chatter
                     // Write to Client as needed
                     if (state == CMessageHandler.MsgState.ReadyForRemote)
                     {
-                        //m.InjectTestMessage(":C" + timeout);
+#if (DEBUG)
+                        m.InjectTestMessage(":C" + timeout);
+#endif
+                        debug("Client sent out msg to " + buddyIp);
 
                         byte[] msg = m.MessageReady;
                         // Send back a response.
@@ -353,7 +374,8 @@ namespace chatter
                         stream.Write(msg, 0, msg.Length);
                     }
 
-                    Thread.Sleep(300);
+                    Thread.Sleep(500);
+                    CSavedIPs.AppendIP(buddyIp);
                 }
 
                 if (stream != null)
@@ -362,8 +384,10 @@ namespace chatter
                     stream.Dispose();
                 }
             }
-            catch //(Exception e)
-            { }
+            catch (Exception e)
+            {
+                debug("Client exception for " + buddyIp + e.ToString());
+            }
 
             
             // Shutdown and end connection
@@ -392,23 +416,28 @@ namespace chatter
 #endif
             string fullMsg = CMessageHandler.GenerateMessage(myName, myIP, msg);
 
-            if (client != null && !ipBuddyMessages.ContainsKey(buddyIp))
+            if (client != null)// && !ipsInUse.Contains(buddyIp))
             {
                 // this is a new connection!
                 ipBuddyMessages[buddyIp] = fullMsg;
                 if (!String.IsNullOrEmpty(buddyFullName))
                     ipBuddyFullNameLookup[buddyIp] = buddyFullName;
 
+                debug("Client starting for " + buddyIp);
                 Task.Factory.StartNew(() => StartClientSide(buddyIp));
             }
             else
             {
                 if (ipsInUse.Contains(buddyIp))
+                {
                     ipBuddyMessages[buddyIp] = fullMsg;
+                }
                 else
                 {
                     // try to restart connection if possible!
+#if !DEBUG_LOOPBACK
                     Task.Factory.StartNew(() => StartClientSide(buddyIp));
+#endif
                     return false; // signal that this message did not go thru
                 }
             }
@@ -431,8 +460,19 @@ namespace chatter
             return localIP;
         }
 
+        static private Chatter _debug = null;
+        static public void debug(string msg)
+        {
+#if (DEBUG)
+            if (_debug != null)
+                _debug.InjectTestMessage("{ " + msg + " }");
+#endif
+        }
+
         static public void StartSearching(Chatter me)
         {
+            _debug = me;
+
             Task.Factory.StartNew(() =>
             {
                 beginThread();
@@ -479,7 +519,7 @@ namespace chatter
                                 ipp = subPart + "." + subsubStart;
                             }
 #if DEBUG_LOOPBACK
-                            if (!ipBuddies.ContainsKey(ipp))
+                            if (!ipsInUse.Contains(ipp))
 #else
                             if (ipp != myIP && !ipsInUse.Contains(ipp))
 #endif
@@ -488,9 +528,11 @@ namespace chatter
 
                                 if (result.AsyncWaitHandle.WaitOne(800))
                                 {
+                                    debug("Found buddy @" + ipp);
+
                                     // found a buddy, send message
                                     SendToBuddy(myPCName, tcpClient, ipp, "", "Connected!");
-                                    CSavedIPs.AppendIP(ipp);
+                                    //CSavedIPs.AppendIP(ipp);
                                 }
                             }
                         }
