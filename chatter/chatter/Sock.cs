@@ -17,6 +17,9 @@ namespace chatter
 {
     public class Sock
     {
+        // helped a lot
+        // https://msdn.microsoft.com/en-us/library/bew39x2a(v=vs.110).aspx
+
         static private int Port = 25011;
 
         static private int threadRunningCount = 0;
@@ -24,7 +27,7 @@ namespace chatter
         static private string subsList;
         static private string myIP;
         static private string myPCName;
-        static private Dictionary<string, string> ipBuddyMessages = new Dictionary<string, string>();
+        static private Dictionary<string, Queue<string>> ipBuddyMessages = new Dictionary<string, Queue<string>>();
         static private Dictionary<string, string> ipBuddyFullNameLookup = new Dictionary<string, string>();
         static private List<string> ipsInUse = new List<string>();
 
@@ -37,7 +40,10 @@ namespace chatter
 
 #if !DEBUG_LOOPBACK
             if (e.FriendIP == myIP)
+            {
+                debug("Newdata event ignored my ip!");
                 return;
+            }
 #endif
             lock (handler)
             {
@@ -57,7 +63,6 @@ namespace chatter
                 myPCName = myName;
                 Sock.subsList = subsList;
                 myIP = ip;
-                //IP = IPAddress.Parse(ip);
                 return true;
             }
             catch { return false; }
@@ -73,15 +78,20 @@ namespace chatter
         static void beginThread()
         {
             threadRunningCount++;
+            debug("Thread count = " + threadRunningCount);
         }
 
         static void endThread()
         {
             threadRunningCount--;
+            debug("Thread count = " + threadRunningCount);
         }
 
         static private void StartListening(IPHostEntry ipHostInfo)
         {
+            //beginThread();
+
+            debug("Listening agent launched");
             while (stayAlive)
             {
                 try
@@ -91,11 +101,8 @@ namespace chatter
 
                     // Create a TCP/IP socket.  
                     Socket listener = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
-
                     listener.Bind(localEndPoint);
                     listener.Listen(10);
-
-                    string last = "";
 
                     while (stayAlive)
                     {
@@ -112,75 +119,66 @@ namespace chatter
                             handler.Shutdown(SocketShutdown.Both);
                             handler.Disconnect(false);
                             handler.Close();
+                            debug("Listening agent ignored my ip!");
                             continue;
                         }
 #endif
-                        if (last == buddyIp)
+                        if (!checkForRunningThread(buddyIp))
                         {
-                            debug("SSListener started for " + buddyIp);
-                            Task.Factory.StartNew(() => StartServerSide(handler, buddyIp));
-                            last = "";
+                            handler.Shutdown(SocketShutdown.Both);
+                            handler.Disconnect(false);
+                            handler.Close();
+                            debug("Listening agent skipped ip: " + buddyIp);
+                            continue;
                         }
-                        last = buddyIp;
+
+                        debug("SSListener started for " + buddyIp);
+                        Task.Factory.StartNew(() => StartServerSide(handler, buddyIp));
                     }
                 }
-                catch { }
+                catch (Exception e)
+                {
+                    debug("Listening agent exception: " + e.ToString());
+                }
 
                 Thread.Sleep(200);
             }
+
+            //endThread();
         }
 
         static private void StartServerSide(Socket handler, string buddyIp)
         {
             beginThread();
 
-            byte[] bytes;
-            int waitingCount = 7;
+            int waitingCount = 0;
 
+            debug("Server thread launched");
             try
             {
-                CMessageHandler m = new CMessageHandler();
+                CMessageHandler m = new CMessageHandler("ServerMH");
                 int timeout = 0;
 
-//#if !DEBUG_LOOPBACK
-                if (!checkForRunningThread(buddyIp))
-                {
-                    endThread();
-                    return;
-                }
-                //#endif
-
                 if (!ipBuddyMessages.ContainsKey(buddyIp))
-                    ipBuddyMessages[buddyIp] = "";
+                    ipBuddyMessages.Add(buddyIp, new Queue<string>());
+
+                handler.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, false);
 
                 // An incoming connection needs to be processed.  
                 while (stayAlive)
                 {
-                    bytes = new byte[1024];
-                    int bytesRec = handler.Receive(bytes);
-
-                    if (bytesRec == 0)
-                        timeout++;
-                    else
-                        timeout = 0;
-
-                    if (timeout >= 7)
+                    if (timeout >= 30)
                     {
                         debug("Server timedout for " + buddyIp);
                         break;
                     }
 
-                    MessageEventArgs mea = m.PumpMessageFromRemote(bytes, bytesRec);
-                    if (mea != null)
+                    if (waitingCount <= 0 && ipBuddyMessages[buddyIp].Count > 0)
                     {
-                        ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
-                        OnNewDataReceived(mea);
-                    }
-
-                    if (waitingCount <= 0 && !String.IsNullOrEmpty(ipBuddyMessages[buddyIp]))
-                    {
-                        m.AddMessageToSend(ipBuddyMessages[buddyIp]);
-                        ipBuddyMessages[buddyIp] = "";
+                        lock (ipBuddyMessages[buddyIp])
+                        {
+                            m.AddMessageToSend(ipBuddyMessages[buddyIp].Dequeue());
+                        }
                     }
 
                     CMessageHandler.MsgState state = m.ProcessStates();
@@ -193,27 +191,31 @@ namespace chatter
 #endif
                         debug("Server sent out msg to " + buddyIp);
 
-                        byte[] msg = m.MessageReady;
-                        // Send back a response.
-                        handler.Send(msg, msg.Length, SocketFlags.None);
+                        send(handler, m.MessageReady, m);
                     }
                     else
                     {
-                        byte[] msg = System.Text.Encoding.ASCII.GetBytes(" ");
-                        // Send back a response.
-                        handler.Send(msg, msg.Length, SocketFlags.None);
+                        send(handler, " ", m);
                     }
+                    m.SendDone.WaitOne(500);
+
+                    if (!receive(handler, m))
+                        timeout++;
+                    else
+                        m.ReceiveDone.WaitOne(500);
 
                     if (waitingCount > 0)
                         waitingCount--;
 
-                    Thread.Sleep(500);
+                    Thread.Sleep(200);
                     CSavedIPs.AppendIP(buddyIp);
                 }
             }
             catch (Exception e)
             {
                 debug("Server exception for " + buddyIp + e.ToString());
+                if (_debug != null)
+                    _debug.InjectTestMessage("User aborted: " + ipBuddyFullNameLookup[buddyIp]);
             }
 
             if (handler != null)
@@ -286,76 +288,50 @@ namespace chatter
             return justAdded;
         }
 
-        static public void StartClientSide(string buddyIp)
+        static public void StartClientSide(Socket sender, string buddyIp)
         {
             beginThread();
 
             int timeout = 0;
-            TcpClient client = null;
+            debug("Client thread launched");
 
             try
             {
-                // Buffer for reading data
-                Byte[] bytes;
-
 #if !DEBUG_LOOPBACK
                 if (!checkForRunningThread(buddyIp))
                 {
                     endThread();
+                    debug("Client ignored this ip: " + buddyIp);
                     return;
                 }
 #endif
-                if (!ipBuddyMessages.ContainsKey(buddyIp))
-                    ipBuddyMessages[buddyIp] = "";
+                
 
-                client = new TcpClient(buddyIp, Port);
-                NetworkStream stream = client.GetStream();
-                CMessageHandler m = new CMessageHandler();
+                if (!ipBuddyMessages.ContainsKey(buddyIp))
+                    ipBuddyMessages.Add(buddyIp, new Queue<string>());
+
+                CMessageHandler m = new CMessageHandler("ClientMH");
 
                 // Enter the working loop
                 while (stayAlive)
                 {
-                    // Get a stream object for reading and writing
-                    //NetworkStream stream = client.GetStream();
-                    stream.ReadTimeout = 1500;
-
-                    // Loop to receive all the data sent by the client.
-                    try
+                    if (timeout >= 12)
                     {
-                        //if (stream.CanRead)
-                        //{
-                        bytes = new byte[2048];
-                        int bytesRec = stream.Read(bytes, 0, bytes.Length);
-                        timeout = 0;
-                        MessageEventArgs mea = m.PumpMessageFromRemote(bytes, bytesRec);
-
-                        if (mea != null)
-                        {
-                            ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
-                            OnNewDataReceived(mea);
-                        }
-                        //}
-                    }
-                    catch (IOException)
-                    {
-                        timeout++;
-                    }
-
-                    if (timeout >= 7)
-                    {
-                        debug("Client timedout for " + buddyIp);
+                        debug("Client timed out for " + buddyIp);
                         break;
                     }
 
-                    if (!String.IsNullOrEmpty(ipBuddyMessages[buddyIp]))
+                    if (ipBuddyMessages[buddyIp].Count > 0)
                     {
-                        m.AddMessageToSend(ipBuddyMessages[buddyIp]);
-                        ipBuddyMessages[buddyIp] = "";
+                        lock (ipBuddyMessages[buddyIp])
+                        {
+                            m.AddMessageToSend(ipBuddyMessages[buddyIp].Dequeue());
+                        }
                     }
 
                     CMessageHandler.MsgState state = m.ProcessStates();
 
-                    // Write to Client as needed
+                    // Write to Server as needed
                     if (state == CMessageHandler.MsgState.ReadyForRemote)
                     {
 #if (DEBUG)
@@ -363,36 +339,33 @@ namespace chatter
 #endif
                         debug("Client sent out msg to " + buddyIp);
 
-                        byte[] msg = m.MessageReady;
-                        // Send back a response.
-                        stream.Write(msg, 0, msg.Length);
+                        send(sender, m.MessageReady, m);
                     }
                     else
                     {
-                        byte[] msg = System.Text.Encoding.ASCII.GetBytes(" ");
-                        // Send back a response.
-                        stream.Write(msg, 0, msg.Length);
+                        send(sender, " ", m);
                     }
+                    m.SendDone.WaitOne(500);
 
-                    Thread.Sleep(500);
+
+                    if (!receive(sender, m))
+                        timeout++;
+                    else
+                        m.ReceiveDone.WaitOne(500);
+
+                    Thread.Sleep(200);
                     CSavedIPs.AppendIP(buddyIp);
                 }
 
-                if (stream != null)
-                {
-                    stream.Close();
-                    stream.Dispose();
-                }
+                sender.Shutdown(SocketShutdown.Both);
+                sender.Close();
             }
             catch (Exception e)
             {
                 debug("Client exception for " + buddyIp + e.ToString());
+                if (_debug != null)
+                    _debug.InjectTestMessage("User aborted: " + ipBuddyFullNameLookup[buddyIp]);
             }
-
-            
-            // Shutdown and end connection
-            if (client != null)
-                client.Close();
 
             lock (ipsInUse)
             {
@@ -408,7 +381,107 @@ namespace chatter
             endThread();
         }
 
-        static public bool SendToBuddy(string myName, TcpClient client, string buddyIp, string buddyFullName, string msg)
+        static private bool receive(Socket client, CMessageHandler m)
+        {
+            try
+            {
+                // Create the state object.
+                StateObject state = new StateObject(m);
+                state.workSocket = client;
+
+                // Begin receiving the data from the remote device.
+                client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
+                return true;
+            }
+            catch (Exception e)
+            {
+                debug(e.ToString());
+                return false;
+            }
+        }
+
+        private static void receiveCallback(IAsyncResult ar)
+        {
+            try
+            {
+                // Retrieve the state object and the client socket   
+                // from the asynchronous state object.  
+                StateObject state = (StateObject)ar.AsyncState;
+                Socket client = state.workSocket;
+
+                // Read data from the remote device.  
+                int bytesRead = client.EndReceive(ar);
+
+                if (bytesRead > 0)
+                {
+                    // There might be more data, so store the data received so far.  
+                    state.sb.Append(Encoding.ASCII.GetString(state.buffer, 0, bytesRead));
+
+                    // Get the rest of the data.  
+                    client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
+                }
+
+
+                // data has arrived; pump into response builder.  
+                if (state.sb.Length > 1)
+                {
+                    MessageEventArgs mea = state.m.PumpMessageFromRemote(state.sb);
+                    state.sb.Clear();
+
+                    if (mea != null)
+                    {
+                        ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
+                        OnNewDataReceived(mea);
+
+                        // Update good ip list as needed
+                        CSavedIPs.AppendIP(mea.FriendIP);
+
+                        // Signal that all bytes have been received.
+                        state.m.ReceiveDone.Set();
+                    }
+                }
+            }
+            catch (Exception e)
+            {
+                Console.WriteLine(e.ToString());
+            }
+        }
+
+        static private void send(Socket client, String data, CMessageHandler m)
+        {
+            // Create the state object.
+            StateObject state = new StateObject(m);
+            state.workSocket = client;
+
+            // Convert the string data to byte data using ASCII encoding.  
+            byte[] byteData = Encoding.ASCII.GetBytes(data);
+
+            // Begin sending the data to the remote device.  
+            client.BeginSend(byteData, 0, byteData.Length, 0, new AsyncCallback(sendCallback), state);
+        }
+
+        private static void sendCallback(IAsyncResult ar)
+        {
+            try
+            {
+                StateObject state = (StateObject)ar.AsyncState;
+
+                // Retrieve the socket from the state object.  
+                Socket client = state.workSocket;
+
+                // Complete sending the data to the remote device.  
+                client.EndSend(ar);
+
+                // Signal that all bytes have been sent.  
+                state.m.SendDone.Set();
+            }
+            catch (Exception e)
+            {
+                debug(e.ToString());
+            }
+        }
+
+        static public bool SendToBuddy(string myName, bool forceReconnect, string buddyIp, string buddyFullName, string msg, Socket client)
         {
 #if !DEBUG_LOOPBACK
             if (buddyIp == myIP)
@@ -416,28 +489,33 @@ namespace chatter
 #endif
             string fullMsg = CMessageHandler.GenerateMessage(myName, myIP, msg);
 
-            if (client != null)// && !ipsInUse.Contains(buddyIp))
+            if (client != null)
             {
                 // this is a new connection!
-                ipBuddyMessages[buddyIp] = fullMsg;
+                if (!ipBuddyMessages.ContainsKey(buddyIp))
+                    ipBuddyMessages.Add(buddyIp, new Queue<string>());
+                ipBuddyMessages[buddyIp].Enqueue(fullMsg);
+
                 if (!String.IsNullOrEmpty(buddyFullName))
                     ipBuddyFullNameLookup[buddyIp] = buddyFullName;
 
                 debug("Client starting for " + buddyIp);
-                Task.Factory.StartNew(() => StartClientSide(buddyIp));
+                Task.Factory.StartNew(() => StartClientSide(client, buddyIp));
             }
             else
             {
                 if (ipsInUse.Contains(buddyIp))
                 {
-                    ipBuddyMessages[buddyIp] = fullMsg;
+                    lock (ipBuddyMessages[buddyIp])
+                    {
+                        ipBuddyMessages[buddyIp].Enqueue(fullMsg);
+                    }
                 }
                 else
                 {
-                    // try to restart connection if possible!
-#if !DEBUG_LOOPBACK
-                    Task.Factory.StartNew(() => StartClientSide(buddyIp));
-#endif
+//#if !DEBUG_LOOPBACK
+                    //Task.Factory.StartNew(() => StartClientSide(buddyIp));
+//#endif
                     return false; // signal that this message did not go thru
                 }
             }
@@ -469,101 +547,159 @@ namespace chatter
 #endif
         }
 
+        // ManualResetEvent instance signal completion.
+        static private void connectCallback(IAsyncResult ar)
+        {
+            try
+            {
+                // Retrieve the socket from the state object.
+                Socket client = (Socket)ar.AsyncState;
+
+                // Complete the connection.
+                client.EndConnect(ar);
+
+                debug("Socket connected to " + client.RemoteEndPoint.ToString());
+
+                // Signal that the connection has been made.
+                SendToBuddy(myPCName, true, client.RemoteEndPoint.ToString().Split(':')[0], "", "Connected!", client);
+            }
+            catch //(Exception e)
+            {
+                //debug(e.ToString());
+            }
+        }
+
         static public void StartSearching(Chatter me)
         {
             _debug = me;
 
             Task.Factory.StartNew(() =>
             {
-                beginThread();
+            beginThread();
+
+#if DEBUG_LOOPBACK
+                debug("Loopback enabled, testing");
+#endif
+
+                debug("Search thread launched");
 
                 string[] octs = myIP.Split(new char[] { '.' }, StringSplitOptions.RemoveEmptyEntries);
-                string[] subsToUse = subsList.Split(',');
+                List<string> subsToUse = new List<string>(subsList.Split(','));
 
-                int theSubIndex = 0;
+                subsToUse.ForEach(debug);
 
-                int subsubMe = Convert.ToInt32(octs[3]);
-
-                string subPart = subsToUse[theSubIndex++];
-                int subsubStart = 2;
-
-#if DEBUG_LOOPBACK
-                subsubStart = subsubMe - 1; // give it a little more time
-#endif
-                string ipp = "";
-                int index = 0;
-                bool usingPreviousList = true;
-                int counts = 0;
-
-                while (stayAlive)
+                // protect search function from invalid subnet parts
+                bool ok = true;
+                foreach (string sub in subsToUse)
                 {
-                    using (TcpClient tcpClient = new TcpClient())
+                    if (sub.Split('.').Count() != 3)
                     {
-                        try
+                        ok = false;
+                        break;
+                    }
+                    foreach (string o in sub.Split('.'))
+                    {
+                        foreach (char c in o)
+                            if (c < '0' || c > '9')
+                            {
+                                ok = false;
+                                break;
+                            }
+                        if (ok)
                         {
-                            if (usingPreviousList)
-                            {
-                                if (CSavedIPs.PreviousIPList.Count > index)
-                                {
-                                    ipp = CSavedIPs.PreviousIPList[index++];
-                                }
-                                else
-                                {
-                                    index = 0;
-                                    usingPreviousList = false;
-                                }
-                            }
-                            
-                            if (!usingPreviousList)
-                            {
-                                ipp = subPart + "." + subsubStart;
-                            }
-#if DEBUG_LOOPBACK
-                            if (!ipsInUse.Contains(ipp))
-#else
-                            if (ipp != myIP && !ipsInUse.Contains(ipp))
-#endif
-                            {
-                                var result = tcpClient.BeginConnect(ipp, Convert.ToInt32(Port), null, null);
-
-                                if (result.AsyncWaitHandle.WaitOne(800))
-                                {
-                                    debug("Found buddy @" + ipp);
-
-                                    // found a buddy, send message
-                                    SendToBuddy(myPCName, tcpClient, ipp, "", "Connected!");
-                                    //CSavedIPs.AppendIP(ipp);
-                                }
-                            }
-                        }
-                        catch { }
-
-                        if (!usingPreviousList)
-                        {
-                            counts++;
-                            if (CSavedIPs.PreviousIPList.Count > 0 && counts >= 13)
-                            {
-                                counts = 0;
-                                usingPreviousList = true;
-                                continue; // try IP list again
-                            }
-
-                                subsubStart++;
-                            if (subsubStart == 127)
-                                subsubStart++;
-                            if (subsubStart >= 254)
-                            {
-                                subsubStart = 2;
-
-                                if (theSubIndex >= subsToUse.Count())
-                                    break; // stop searching!
-                                subPart = subsToUse[theSubIndex++];
-                            }
-
-                            
-
+                            if (Convert.ToInt32(o) > 255)
+                                ok = false;
                         }
                     }
+                }
+
+                if (ok)
+                {
+                    int theSubIndex = 0;
+
+                    int subsubMe = Convert.ToInt32(octs[3]);
+
+                    string subPart = subsToUse[theSubIndex++].Trim();
+                    int subsubStart = 2;
+
+#if DEBUG_LOOPBACK
+                    subsubStart = subsubMe - 1; // give it a little more time
+#endif
+                    string ipp = "";
+                    int index = 0;
+                    bool usingPreviousList = true;
+                    int counts = 0;
+
+                    while (stayAlive)
+                    {
+                        using (TcpClient tcpClient = new TcpClient())
+                        {
+                            try
+                            {
+                                if (usingPreviousList)
+                                {
+                                    if (CSavedIPs.PreviousIPList.Count > index)
+                                    {
+                                        ipp = CSavedIPs.PreviousIPList[index++];
+                                    }
+                                    else
+                                    {
+                                        index = 0;
+                                        usingPreviousList = false;
+                                    }
+                                }
+
+                                if (!usingPreviousList)
+                                {
+                                    ipp = subPart + "." + subsubStart;
+                                }
+#if DEBUG_LOOPBACK
+                                if (!ipsInUse.Contains(ipp))
+#else
+                                if (ipp != myIP && !ipsInUse.Contains(ipp))
+#endif
+                                {
+                                    // Create a TCP/IP socket.
+                                    Socket client = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+
+                                    var result = client.BeginConnect(ipp, Convert.ToInt32(Port), new AsyncCallback(connectCallback), client);
+
+                                    if (result.AsyncWaitHandle.WaitOne(800))
+                                    {
+                                        debug("Found buddy @" + ipp);
+                                    }
+                                }
+                            }
+                            catch { }
+
+                            if (!usingPreviousList)
+                            {
+                                counts++;
+                                if (CSavedIPs.PreviousIPList.Count > 0 && counts >= 13)
+                                {
+                                    counts = 0;
+                                    usingPreviousList = true;
+                                    continue; // try IP list again
+                                }
+
+                                subsubStart++;
+                                if (subsubStart == 127)
+                                    subsubStart++;
+                                if (subsubStart >= 254)
+                                {
+                                    subsubStart = 2;
+
+                                    if (theSubIndex >= subsToUse.Count())
+                                        break; // stop searching!
+                                    subPart = subsToUse[theSubIndex++].Trim();
+                                }
+                            }
+                        }
+                    }
+                }
+                else
+                {
+                    debug("Search invalid subnet(s)");
                 }
 
                 endThread();
@@ -573,5 +709,21 @@ namespace chatter
                 return;
             });
         }
+    }
+
+    // State object for receiving data from remote device.  
+    public class StateObject
+    {
+        public StateObject(CMessageHandler mh)
+        { m = mh; }
+        public CMessageHandler m = null;
+        // Client socket.  
+        public Socket workSocket = null;
+        // Size of receive buffer.  
+        public const int BufferSize = 256;
+        // Receive buffer.  
+        public byte[] buffer = new byte[BufferSize];
+        // Received data string.  
+        public StringBuilder sb = new StringBuilder();
     }
 }

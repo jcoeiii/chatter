@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace chatter
@@ -12,64 +13,69 @@ namespace chatter
 
         private MsgState _state = MsgState.Idle;
         private bool _waitingForResponse = false;
-        private bool _lastWasAck = false;
         private string _msg2Go = "";
         private int _attempt = 0;
-        private List<string> _msgs2Send = new List<string>();
+        private Queue<string> _msgs2Send = new Queue<string>();
         private StringBuilder _buildMsg = new StringBuilder();
-        private string _lastRecvedMsg = "";
+        private string _lastAckMsg = "";
+        private bool _ackWasSent = false;
         private string currentId = "";
         private DateTime _startTime;
+        private string _name;
+        private bool _completed = false;
 
-        //public CMessageHandler()
-        //{
-        //}
-
-        public MessageEventArgs PumpMessageFromRemote(byte[] bytes, int bytesRec)
+        public CMessageHandler(string name)
         {
-            string data = Encoding.ASCII.GetString(bytes, 0, bytesRec);
+            _name = name;
+        }
+
+        public ManualResetEvent SendDone = new ManualResetEvent(false);
+        public ManualResetEvent ReceiveDone = new ManualResetEvent(false);
+
+        public MessageEventArgs PumpMessageFromRemote(StringBuilder msg_sb)
+        {
+            string data = msg_sb.ToString();
 
             if (!String.IsNullOrEmpty(data))
             {
                 // build local message up
                 _buildMsg.Append(data);
 
-                string localMsg = _buildMsg.ToString().Trim();
-
-                if (localMsg.IndexOf("<EOF>") > -1)
+                string localMsg = _buildMsg.ToString();
+                int myIndex = localMsg.IndexOf("<EOF>");
+                if (myIndex > -1)
                 {
-                    MessageEventArgs mea = new MessageEventArgs(localMsg);
-                    //string tmp = localMsg;
-                    _buildMsg.Clear();
+                    localMsg = localMsg.Substring(0, myIndex + 1 + 4).Trim();
+                    _buildMsg.Remove(0, myIndex + 1 + 4);
 
+                    MessageEventArgs mea = new MessageEventArgs(localMsg);
                     if (mea.Valid)
                     {
-                        // this was a reply ACK
+                        // this was a reply ACK?
                         if (currentId == mea.Id)
                         {
-                            Sock.debug("ACK:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
-                            mea = null; // don't send a repeat back to the user
+                            Sock.debug(_name + ":got ACK:" + this._state.ToString() + ":Id=" + mea.Id);
+                            mea = null; // don't send a repeat back to the user screen
+                            this._completed = true;
                         }
                         else
                         {
-                            _lastRecvedMsg = localMsg;
+                            _lastAckMsg = generate(mea.Id, mea.FriendName, mea.FriendIP, ""); // no need to send entire msg payload
 
-                            if (this._state == MsgState.Idle)
+                            if (!this._waitingForResponse)
                             {
-                                Sock.debug("Msg:was idle now AppendAck:Current=" + currentId + ":Id=" + mea.Id);
-                                currentId = mea.Id;
+                                Sock.debug(_name + ":AppendAck:Current=" + currentId + ":Id=" + mea.Id);
                                 this._state = MsgState.AppendAck;
                             }
                             else
                             {
-                                Sock.debug("Msg:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
-                                currentId = mea.Id;
+                                Sock.debug(_name + ":Msg:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
                             }
                         }
                         return mea;
                     }
-                    //else
-                    // oops, invalid message received
+                    else
+                        Sock.debug(_name + ": oops, invalid message received");
                 }
                 else if (_buildMsg.Length > 250 && localMsg == "")
                     _buildMsg.Clear();
@@ -86,41 +92,45 @@ namespace chatter
                 case MsgState.Idle:
                     if (this._msgs2Send.Count > 0)
                     {
-                        lock (this._msgs2Send)
+                        this._msg2Go = this._msgs2Send.Dequeue();
+                        if (!String.IsNullOrWhiteSpace(this._msg2Go))
                         {
-                            this._msg2Go = this._msgs2Send[0];
-                            this._msgs2Send.RemoveAt(0);
+                            this._completed = false;
                             this._attempt = 0;
-                            if (!this._lastWasAck)
-                                this.currentId = "";
+                            this._ackWasSent = false;
+                            this._waitingForResponse = false;
+                            this._state = MsgState.ReadyForRemote;
                         }
-                        this._state = MsgState.ReadyForRemote;
                     }
                     break;
 
                 case MsgState.ReadyForRemote:
-                    if (this._waitingForResponse)
-                    {
-                        if (this._lastWasAck)
-                        {
-                            this._lastWasAck = false;
-                            this._state = MsgState.Idle;
-                        }
-                        else
-                            this._state = MsgState.WaitingResponse;
-                    }
-                    this._attempt++;
                     if (this._attempt >= 3)
                     {
                         this._state = MsgState.Idle;
                     }
+                    else if (this._ackWasSent)
+                    {
+                        this._ackWasSent = false;
+                        this._state = MsgState.Idle;
+                    }
+                    else if (this._waitingForResponse)
+                    {
+                        this._waitingForResponse = true;
+                        this._state = MsgState.WaitingResponse;
+                    }
+                    else if (this._completed)
+                    {
+                        this._state = MsgState.Idle;
+                    }
+
+                    this._attempt++;
                     break;
 
                 case MsgState.WaitingResponse:
                     // message was already sent out, check timeout
                     DateTime endTime = DateTime.Now;
-                    TimeSpan total = endTime.Subtract(this._startTime);
-                    if (total.Milliseconds >= 400)
+                    if (endTime.Subtract(this._startTime).Milliseconds >= 400)
                     {
                         this._waitingForResponse = false;
                         this._state = MsgState.ReadyForRemote;
@@ -128,9 +138,11 @@ namespace chatter
                     break;
 
                 case MsgState.AppendAck:
-                    this._lastWasAck = true;
-                    AddMessageToSend(_lastRecvedMsg);
-                    this._state = MsgState.Idle;
+                    // force one shot ACK
+                    this._attempt = 0;
+                    this._ackWasSent = true;
+                    this._msg2Go = this._lastAckMsg;
+                    this._state = MsgState.ReadyForRemote;
                     break;
 
                 default: break;
@@ -139,13 +151,14 @@ namespace chatter
             return this._state;
         }
 
-        public byte[] MessageReady
+        public string MessageReady
         {
             get
             {
-                this._waitingForResponse = true;
-                this._startTime = DateTime.Now;
-                return System.Text.Encoding.ASCII.GetBytes(this._msg2Go);
+                MessageEventArgs mea = new MessageEventArgs(this._msg2Go);
+                currentId = mea.Id;
+                this._startTime = DateTime.Now; // stamp it right now, going to send out over socket
+                return this._msg2Go;
             }
         }
 
@@ -158,30 +171,31 @@ namespace chatter
 
         public void AddMessageToSend(string msg)
         {
-            lock (this._msgs2Send)
-            {
-                this._msgs2Send.Add(msg);
-            }
+            this._msgs2Send.Enqueue(msg);
         }
 
 
-        //Function to get random number
+        // function to get unique random number
         private static int last_number = 0;
         private static readonly Random getrandom = new Random();
         private static readonly object syncLock = new object();
 
         public static string GenerateMessage(string me, string ip, string msg)
         {
+            int n = last_number;
             lock (syncLock)
             { // synchronize
-
-                int n = last_number;
                 while (n == last_number)
                     n = getrandom.Next(1, 0xFFFF);
                 last_number = n;
             }
-            //                          id      | from name| from IP  | text data message
-            return last_number.ToString("X") + "|" + me + "|" + ip + "|" + msg.Replace("|", "~") + "<EOF>";
+            return generate(n.ToString("X"), me, ip, msg);
+        }
+
+        private static string generate(string id, string me, string ip, string msg)
+        {
+            //     id    | from name| from IP  | text data message       with EOF termination
+            return id + "|" + me + "|" + ip + "|" + msg.Replace("|", "~") + "<EOF>";
         }
     }
 }

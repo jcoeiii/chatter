@@ -31,7 +31,10 @@ namespace chatter
             Sock.NewData += Sock_NewDataReceivedEventHandler;
             myIP = Sock.GetIPAddress(ipFirst);
             this.groupBoxBottom.Text = "My IP: " + myIP;
+        }
 
+        private void Chatter_Load(object sender, EventArgs e)
+        {
             buttonGoConnection_Click(null, null);
 
             this.richTextBoxChatIn.Select();
@@ -107,6 +110,12 @@ namespace chatter
         {
             if (e.KeyChar.Equals((char)Keys.Enter))
             {
+                if (String.IsNullOrWhiteSpace(this.richTextBoxChatIn.Text.Trim()))
+                {
+                    richTextBoxChatIn.Clear();
+                    return;
+                }
+
                 string m = this.richTextBoxChatIn.Text.Substring(0, this.richTextBoxChatIn.Text.Length - 1);
 
                 if (this.comboBoxUsers.Items.Count == 1)
@@ -122,7 +131,7 @@ namespace chatter
                 string buddyName = this.comboBoxUsers.Text;
 
                 // ready to send message to a buddy
-                if (this.comboBoxUsers.SelectedIndex != 0 && !Sock.SendToBuddy(userName, null, buddyList[buddyName], buddyName, m))
+                if (this.comboBoxUsers.SelectedIndex != 0 && !Sock.SendToBuddy(userName, false, buddyList[buddyName], buddyName, m, null))
                 {
                     appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
                     appendText(richTextBoxChatOut, m + " <remote ignored>" + Environment.NewLine, Color.LightSalmon);
@@ -148,7 +157,7 @@ namespace chatter
                 if (this.comboBoxUsers.SelectedIndex == 0)
                 {
                     foreach (string key in this.buddyList.Keys)
-                        Sock.SendToBuddy(userName, null, buddyList[key], key, m);
+                        Sock.SendToBuddy(userName, false, buddyList[key], key, m, null);
                 }
             }
         }
@@ -178,23 +187,87 @@ namespace chatter
         {
             if (this.comboBoxUsers.SelectedIndex != 0)
             {
-                Sock.SendToBuddy(userName, null, buddyList[this.comboBoxUsers.Text], this.comboBoxUsers.Text, "Reconnected!");
+                Sock.SendToBuddy(userName, true, buddyList[this.comboBoxUsers.Text], this.comboBoxUsers.Text, "Reconnected!", null);
             }
         }
 
         public void InjectTestMessage(string msg)
         {
-            this.Invoke((MethodInvoker)delegate
+            if (!isExit)
             {
-                if (!isExit)
+                try
                 {
-                    appendText(richTextBoxChatOut, "Debug:\t\t", Color.LightGreen);
+                    this.Invoke((MethodInvoker)delegate
+                    {
+                        if (!isExit)
+                        {
+                            appendText(richTextBoxChatOut, "Debug:\t\t", Color.LightGreen);
+                        }
+                        if (!isExit)
+                        {
+                            appendText(richTextBoxChatOut, msg + Environment.NewLine, Color.LightGray);
+                        }
+                    });
                 }
-                if (!isExit)
-                {
-                    appendText(richTextBoxChatOut, msg + Environment.NewLine, Color.LightGray);
-                }
-            });
+                catch { }
+            }
+        }
+
+        private void richTextBoxChatOut_LinkClicked(object sender, LinkClickedEventArgs e)
+        {
+            // enable html tags to display in browser
+            System.Diagnostics.Process.Start(e.LinkText);
+        }
+
+        private void richTextBoxChatOut_MouseUp(object sender, MouseEventArgs e)
+        {   //click event
+            ContextMenu contextMenu = new System.Windows.Forms.ContextMenu();
+            MenuItem menuItem = new MenuItem("Copy");
+            menuItem.Click += new EventHandler(CopyAction);
+            contextMenu.MenuItems.Add(menuItem);
+            contextMenu.MenuItems.Add(menuItem);
+
+            richTextBoxChatOut.ContextMenu = contextMenu;
+        }
+
+        void CopyAction(object sender, EventArgs e)
+        {
+            Clipboard.SetText(richTextBoxChatOut.SelectedText);
+        }
+
+        private void richTextBoxChatIn_MouseUp(object sender, MouseEventArgs e)
+        {
+            //click event
+            ContextMenu contextMenu = new System.Windows.Forms.ContextMenu();
+            MenuItem menuItem = new MenuItem("Cut");
+            menuItem.Click += new EventHandler(CutAction2);
+            contextMenu.MenuItems.Add(menuItem);
+            menuItem = new MenuItem("Copy");
+            menuItem.Click += new EventHandler(CopyAction2);
+            contextMenu.MenuItems.Add(menuItem);
+            menuItem = new MenuItem("Paste");
+            menuItem.Click += new EventHandler(PasteAction2);
+            contextMenu.MenuItems.Add(menuItem);
+
+            richTextBoxChatIn.ContextMenu = contextMenu;
+        }
+
+        void CutAction2(object sender, EventArgs e)
+        {
+            richTextBoxChatIn.Cut();
+        }
+
+        void CopyAction2(object sender, EventArgs e)
+        {
+            Clipboard.SetText(richTextBoxChatIn.SelectedText);
+        }
+
+        void PasteAction2(object sender, EventArgs e)
+        {
+            if (Clipboard.ContainsText())
+            {
+                richTextBoxChatIn.Text += Clipboard.GetText(TextDataFormat.Text).ToString();
+            }
         }
     }
 }

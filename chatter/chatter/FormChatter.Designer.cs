@@ -150,6 +150,8 @@
             this.richTextBoxChatOut.Size = new System.Drawing.Size(522, 207);
             this.richTextBoxChatOut.TabIndex = 0;
             this.richTextBoxChatOut.Text = "";
+            this.richTextBoxChatOut.LinkClicked += new System.Windows.Forms.LinkClickedEventHandler(this.richTextBoxChatOut_LinkClicked);
+            this.richTextBoxChatOut.MouseUp += new System.Windows.Forms.MouseEventHandler(this.richTextBoxChatOut_MouseUp);
             // 
             // richTextBoxChatIn
             // 
@@ -163,6 +165,7 @@
             this.richTextBoxChatIn.TabIndex = 0;
             this.richTextBoxChatIn.Text = "";
             this.richTextBoxChatIn.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.richTextBoxChat_KeyPress);
+            this.richTextBoxChatIn.MouseUp += new System.Windows.Forms.MouseEventHandler(this.richTextBoxChatIn_MouseUp);
             // 
             // Chatter
             // 
@@ -177,6 +180,7 @@
             this.Name = "Chatter";
             this.Text = "Chatter V1.5.1";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Chatter_FormClosing);
+            this.Load += new System.EventHandler(this.Chatter_Load);
             this.groupBoxTop.ResumeLayout(false);
             this.groupBoxTop.PerformLayout();
             this.groupBoxBottom.ResumeLayout(false);
