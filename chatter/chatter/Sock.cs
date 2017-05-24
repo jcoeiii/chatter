@@ -29,6 +29,8 @@ namespace chatter
         static private string myPCName;
         static private Dictionary<string, Queue<string>> ipBuddyMessages = new Dictionary<string, Queue<string>>();
         static private Dictionary<string, string> ipBuddyFullNameLookup = new Dictionary<string, string>();
+        static private Dictionary<string, bool> ipBuddyIsTyping = new Dictionary<string, bool>();
+        static private bool myTypingStatus = false;
         static private List<string> ipsInUse = new List<string>();
 
         static public event NewDataReceivedEventHandler NewData;
@@ -51,6 +53,29 @@ namespace chatter
                 {
                     handler(e);
                 }
+            }
+        }
+
+        static public void MyTypingStatus(bool status)
+        {
+            myTypingStatus = status;
+        }
+
+        static public string TypingBuddyList
+        {
+            get
+            {
+                string typers = "";
+                try
+                {
+                    foreach (string ip in ipsInUse)
+                    {
+                        if (ipBuddyFullNameLookup.ContainsKey(ip) && ipBuddyIsTyping[ip])
+                            typers += ipBuddyFullNameLookup[ip] + " ";
+                    }
+                }
+                catch { }
+                return typers;
             }
         }
 
@@ -162,6 +187,9 @@ namespace chatter
                 if (!ipBuddyMessages.ContainsKey(buddyIp))
                     ipBuddyMessages.Add(buddyIp, new Queue<string>());
 
+                if (!ipBuddyIsTyping.ContainsKey(buddyIp))
+                    ipBuddyIsTyping.Add(buddyIp, false);
+
                 handler.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, false);
 
                 // An incoming connection needs to be processed.  
@@ -195,7 +223,10 @@ namespace chatter
                     }
                     else
                     {
-                        send(handler, " ", m);
+                        if (myTypingStatus)
+                            send(handler, "\t", m);
+                        else
+                            send(handler, " ", m);
                     }
                     m.SendDone.WaitOne(500);
 
@@ -310,6 +341,9 @@ namespace chatter
                 if (!ipBuddyMessages.ContainsKey(buddyIp))
                     ipBuddyMessages.Add(buddyIp, new Queue<string>());
 
+                if (!ipBuddyIsTyping.ContainsKey(buddyIp))
+                    ipBuddyIsTyping.Add(buddyIp, false);
+
                 CMessageHandler m = new CMessageHandler("ClientMH");
 
                 // Enter the working loop
@@ -343,7 +377,10 @@ namespace chatter
                     }
                     else
                     {
-                        send(sender, " ", m);
+                        if (myTypingStatus)
+                            send(sender, "\t", m);
+                        else
+                            send(sender, " ", m);
                     }
                     m.SendDone.WaitOne(500);
 
@@ -415,18 +452,15 @@ namespace chatter
                 if (bytesRead > 0)
                 {
                     // There might be more data, so store the data received so far.  
-                    state.sb.Append(Encoding.ASCII.GetString(state.buffer, 0, bytesRead));
+                    //state.sb.Append(Encoding.ASCII.GetString(state.buffer, 0, bytesRead));
 
-                    // Get the rest of the data.  
-                    client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
-                }
+                    string buddyIp;
+                    bool isBuddyTyping;
+                    MessageEventArgs mea = state.m.PumpMessageFromRemote(Encoding.ASCII.GetString(state.buffer, 0, bytesRead), out buddyIp, out isBuddyTyping);
+                    //state.sb.Clear();
 
-
-                // data has arrived; pump into response builder.  
-                if (state.sb.Length > 1)
-                {
-                    MessageEventArgs mea = state.m.PumpMessageFromRemote(state.sb);
-                    state.sb.Clear();
+                    if (!String.IsNullOrWhiteSpace(buddyIp))
+                        ipBuddyIsTyping[buddyIp] = isBuddyTyping;
 
                     if (mea != null)
                     {
@@ -439,7 +473,35 @@ namespace chatter
                         // Signal that all bytes have been received.
                         state.m.ReceiveDone.Set();
                     }
+
+                    // Get the rest of the data.  
+                    client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
                 }
+
+
+                // data has arrived; pump into response builder.  
+                //if (state.sb.Length > 1)
+                //{
+                //    string buddyIp;
+                //    bool isBuddyTyping;
+                //    MessageEventArgs mea = state.m.PumpMessageFromRemote(state.sb.ToString(), out buddyIp, out isBuddyTyping);
+                //    state.sb.Clear();
+
+                //    if (!String.IsNullOrWhiteSpace(buddyIp))
+                //        ipBuddyIsTyping[buddyIp] = isBuddyTyping;
+
+                //    if (mea != null)
+                //    {
+                //        ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
+                //        OnNewDataReceived(mea);
+
+                //        // Update good ip list as needed
+                //        CSavedIPs.AppendIP(mea.FriendIP);
+
+                //        // Signal that all bytes have been received.
+                //        state.m.ReceiveDone.Set();
+                //    }
+                //}
             }
             catch (Exception e)
             {

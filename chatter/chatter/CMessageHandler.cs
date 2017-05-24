@@ -23,6 +23,7 @@ namespace chatter
         private DateTime _startTime;
         private string _name;
         private bool _completed = false;
+        private string _buddyIp = "";
 
         public CMessageHandler(string name)
         {
@@ -32,9 +33,14 @@ namespace chatter
         public ManualResetEvent SendDone = new ManualResetEvent(false);
         public ManualResetEvent ReceiveDone = new ManualResetEvent(false);
 
-        public MessageEventArgs PumpMessageFromRemote(StringBuilder msg_sb)
+        public MessageEventArgs PumpMessageFromRemote(string data, out string buddyIp, out bool isTyping)
         {
-            string data = msg_sb.ToString();
+            // typing helpers
+            buddyIp = _buddyIp;
+            if (data.Contains('\t'))
+                isTyping = true;
+            else
+                isTyping = false;
 
             if (!String.IsNullOrEmpty(data))
             {
@@ -51,6 +57,9 @@ namespace chatter
                     MessageEventArgs mea = new MessageEventArgs(localMsg);
                     if (mea.Valid)
                     {
+                        // for typing ref
+                        buddyIp = _buddyIp = mea.FriendIP;
+
                         // this was a reply ACK?
                         if (currentId == mea.Id)
                         {

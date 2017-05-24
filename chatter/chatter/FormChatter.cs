@@ -40,12 +40,17 @@ namespace chatter
             this.richTextBoxChatIn.Select();
             this.richTextBoxChatIn.SelectionStart = 0;
             this.richTextBoxChatIn.Focus();
+
+            this._lastTyped.Interval = 4000; // 4 seconds
+            this._lastTyped.Tick += _lastTyped_Tick;
+            this._lastTyped.Start();
         }
 
         private bool isExit = false;
         private string userName;
         private string myIP;
         private Dictionary<string, string> buddyList = new Dictionary<string, string>();
+        private Timer _lastTyped = new Timer();
 
         public void EnableGoButton()
         {
@@ -116,7 +121,7 @@ namespace chatter
                     return;
                 }
 
-                string m = this.richTextBoxChatIn.Text.Substring(0, this.richTextBoxChatIn.Text.Length - 1);
+                string m = this.richTextBoxChatIn.Text.TrimEnd();//.Substring(0, this.richTextBoxChatIn.Text.Length - 1);
 
                 if (this.comboBoxUsers.Items.Count == 1)
                 {
@@ -267,6 +272,34 @@ namespace chatter
             if (Clipboard.ContainsText())
             {
                 richTextBoxChatIn.Text += Clipboard.GetText(TextDataFormat.Text).ToString();
+            }
+        }
+
+        private void richTextBoxChatIn_TextChanged(object sender, EventArgs e)
+        {
+            Sock.MyTypingStatus(true);
+            _lastTyped.Stop();
+            _lastTyped.Start();
+        }
+
+        void _lastTyped_Tick(object sender, EventArgs e)
+        {
+            Sock.MyTypingStatus(false);
+
+            if (!isExit)
+            {
+                this.Invoke((MethodInvoker)delegate
+                {
+                    try
+                    {
+                        string list = Sock.TypingBuddyList;
+                        if (String.IsNullOrWhiteSpace(list))
+                            this.toolStripLabelDisplay.Text = "";
+                        else
+                            this.toolStripLabelDisplay.Text = "Typing: " + list;
+                    }
+                    catch { }
+                });
             }
         }
     }

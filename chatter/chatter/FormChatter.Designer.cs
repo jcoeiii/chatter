@@ -38,12 +38,15 @@
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
             this.richTextBoxChatOut = new System.Windows.Forms.RichTextBox();
             this.richTextBoxChatIn = new System.Windows.Forms.RichTextBox();
+            this.toolStripDisplay = new System.Windows.Forms.ToolStrip();
+            this.toolStripLabelDisplay = new System.Windows.Forms.ToolStripLabel();
             this.groupBoxTop.SuspendLayout();
             this.groupBoxBottom.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).BeginInit();
             this.splitContainer1.Panel1.SuspendLayout();
             this.splitContainer1.Panel2.SuspendLayout();
             this.splitContainer1.SuspendLayout();
+            this.toolStripDisplay.SuspendLayout();
             this.SuspendLayout();
             // 
             // groupBoxTop
@@ -54,20 +57,20 @@
             this.groupBoxTop.Controls.Add(this.textBoxSubs);
             this.groupBoxTop.Dock = System.Windows.Forms.DockStyle.Top;
             this.groupBoxTop.Location = new System.Drawing.Point(0, 0);
-            this.groupBoxTop.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.groupBoxTop.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.groupBoxTop.Name = "groupBoxTop";
-            this.groupBoxTop.Padding = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.groupBoxTop.Size = new System.Drawing.Size(528, 62);
+            this.groupBoxTop.Padding = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.groupBoxTop.Size = new System.Drawing.Size(467, 50);
             this.groupBoxTop.TabIndex = 0;
             this.groupBoxTop.TabStop = false;
             this.groupBoxTop.Text = "Name:";
             // 
             // buttonConnect
             // 
-            this.buttonConnect.Location = new System.Drawing.Point(437, 26);
-            this.buttonConnect.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.buttonConnect.Location = new System.Drawing.Point(328, 21);
+            this.buttonConnect.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.buttonConnect.Name = "buttonConnect";
-            this.buttonConnect.Size = new System.Drawing.Size(79, 23);
+            this.buttonConnect.Size = new System.Drawing.Size(59, 19);
             this.buttonConnect.TabIndex = 3;
             this.buttonConnect.Text = "Connect";
             this.buttonConnect.UseVisualStyleBackColor = true;
@@ -75,10 +78,10 @@
             // 
             // buttonGoConnection
             // 
-            this.buttonGoConnection.Location = new System.Drawing.Point(175, 26);
-            this.buttonGoConnection.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.buttonGoConnection.Location = new System.Drawing.Point(131, 21);
+            this.buttonGoConnection.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.buttonGoConnection.Name = "buttonGoConnection";
-            this.buttonGoConnection.Size = new System.Drawing.Size(60, 23);
+            this.buttonGoConnection.Size = new System.Drawing.Size(45, 19);
             this.buttonGoConnection.TabIndex = 2;
             this.buttonGoConnection.Text = "Look";
             this.buttonGoConnection.UseVisualStyleBackColor = true;
@@ -90,18 +93,18 @@
             this.comboBoxUsers.FormattingEnabled = true;
             this.comboBoxUsers.Items.AddRange(new object[] {
             "All Users"});
-            this.comboBoxUsers.Location = new System.Drawing.Point(240, 26);
-            this.comboBoxUsers.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.comboBoxUsers.Location = new System.Drawing.Point(180, 21);
+            this.comboBoxUsers.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.comboBoxUsers.Name = "comboBoxUsers";
-            this.comboBoxUsers.Size = new System.Drawing.Size(191, 24);
+            this.comboBoxUsers.Size = new System.Drawing.Size(144, 21);
             this.comboBoxUsers.TabIndex = 1;
             // 
             // textBoxSubs
             // 
-            this.textBoxSubs.Location = new System.Drawing.Point(12, 26);
-            this.textBoxSubs.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.textBoxSubs.Location = new System.Drawing.Point(9, 21);
+            this.textBoxSubs.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.textBoxSubs.Name = "textBoxSubs";
-            this.textBoxSubs.Size = new System.Drawing.Size(156, 22);
+            this.textBoxSubs.Size = new System.Drawing.Size(118, 20);
             this.textBoxSubs.TabIndex = 0;
             this.textBoxSubs.TextChanged += new System.EventHandler(this.textBoxPort_TextChanged);
             // 
@@ -109,11 +112,11 @@
             // 
             this.groupBoxBottom.Controls.Add(this.splitContainer1);
             this.groupBoxBottom.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.groupBoxBottom.Location = new System.Drawing.Point(0, 62);
-            this.groupBoxBottom.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.groupBoxBottom.Location = new System.Drawing.Point(0, 50);
+            this.groupBoxBottom.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.groupBoxBottom.Name = "groupBoxBottom";
-            this.groupBoxBottom.Padding = new System.Windows.Forms.Padding(3, 2, 3, 2);
-            this.groupBoxBottom.Size = new System.Drawing.Size(528, 280);
+            this.groupBoxBottom.Padding = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.groupBoxBottom.Size = new System.Drawing.Size(467, 259);
             this.groupBoxBottom.TabIndex = 1;
             this.groupBoxBottom.TabStop = false;
             this.groupBoxBottom.Text = "My IP:";
@@ -121,8 +124,7 @@
             // splitContainer1
             // 
             this.splitContainer1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.splitContainer1.Location = new System.Drawing.Point(3, 17);
-            this.splitContainer1.Margin = new System.Windows.Forms.Padding(4);
+            this.splitContainer1.Location = new System.Drawing.Point(2, 15);
             this.splitContainer1.Name = "splitContainer1";
             this.splitContainer1.Orientation = System.Windows.Forms.Orientation.Horizontal;
             // 
@@ -133,9 +135,8 @@
             // splitContainer1.Panel2
             // 
             this.splitContainer1.Panel2.Controls.Add(this.richTextBoxChatIn);
-            this.splitContainer1.Size = new System.Drawing.Size(522, 261);
-            this.splitContainer1.SplitterDistance = 207;
-            this.splitContainer1.SplitterWidth = 5;
+            this.splitContainer1.Size = new System.Drawing.Size(463, 242);
+            this.splitContainer1.SplitterDistance = 191;
             this.splitContainer1.TabIndex = 1;
             // 
             // richTextBoxChatOut
@@ -144,10 +145,10 @@
             this.richTextBoxChatOut.Dock = System.Windows.Forms.DockStyle.Fill;
             this.richTextBoxChatOut.ForeColor = System.Drawing.Color.LightGreen;
             this.richTextBoxChatOut.Location = new System.Drawing.Point(0, 0);
-            this.richTextBoxChatOut.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.richTextBoxChatOut.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.richTextBoxChatOut.Name = "richTextBoxChatOut";
             this.richTextBoxChatOut.ReadOnly = true;
-            this.richTextBoxChatOut.Size = new System.Drawing.Size(522, 207);
+            this.richTextBoxChatOut.Size = new System.Drawing.Size(463, 191);
             this.richTextBoxChatOut.TabIndex = 0;
             this.richTextBoxChatOut.Text = "";
             this.richTextBoxChatOut.LinkClicked += new System.Windows.Forms.LinkClickedEventHandler(this.richTextBoxChatOut_LinkClicked);
@@ -156,29 +157,50 @@
             // richTextBoxChatIn
             // 
             this.richTextBoxChatIn.BackColor = System.Drawing.SystemColors.HighlightText;
+            this.richTextBoxChatIn.DetectUrls = false;
             this.richTextBoxChatIn.Dock = System.Windows.Forms.DockStyle.Fill;
             this.richTextBoxChatIn.ForeColor = System.Drawing.SystemColors.ActiveCaptionText;
             this.richTextBoxChatIn.Location = new System.Drawing.Point(0, 0);
-            this.richTextBoxChatIn.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.richTextBoxChatIn.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
+            this.richTextBoxChatIn.MaxLength = 10000;
             this.richTextBoxChatIn.Name = "richTextBoxChatIn";
-            this.richTextBoxChatIn.Size = new System.Drawing.Size(522, 49);
+            this.richTextBoxChatIn.Size = new System.Drawing.Size(463, 47);
             this.richTextBoxChatIn.TabIndex = 0;
             this.richTextBoxChatIn.Text = "";
+            this.richTextBoxChatIn.TextChanged += new System.EventHandler(this.richTextBoxChatIn_TextChanged);
             this.richTextBoxChatIn.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.richTextBoxChat_KeyPress);
             this.richTextBoxChatIn.MouseUp += new System.Windows.Forms.MouseEventHandler(this.richTextBoxChatIn_MouseUp);
             // 
+            // toolStripDisplay
+            // 
+            this.toolStripDisplay.Dock = System.Windows.Forms.DockStyle.Bottom;
+            this.toolStripDisplay.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.toolStripLabelDisplay});
+            this.toolStripDisplay.Location = new System.Drawing.Point(0, 309);
+            this.toolStripDisplay.Name = "toolStripDisplay";
+            this.toolStripDisplay.ShowItemToolTips = false;
+            this.toolStripDisplay.Size = new System.Drawing.Size(467, 25);
+            this.toolStripDisplay.TabIndex = 2;
+            this.toolStripDisplay.Text = "toolStrip1";
+            // 
+            // toolStripLabelDisplay
+            // 
+            this.toolStripLabelDisplay.Name = "toolStripLabelDisplay";
+            this.toolStripLabelDisplay.Size = new System.Drawing.Size(0, 22);
+            // 
             // Chatter
             // 
-            this.AutoScaleDimensions = new System.Drawing.SizeF(8F, 16F);
+            this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 13F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
-            this.ClientSize = new System.Drawing.Size(528, 342);
+            this.ClientSize = new System.Drawing.Size(467, 334);
             this.Controls.Add(this.groupBoxBottom);
+            this.Controls.Add(this.toolStripDisplay);
             this.Controls.Add(this.groupBoxTop);
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.SizableToolWindow;
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
-            this.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
+            this.Margin = new System.Windows.Forms.Padding(2, 2, 2, 2);
             this.Name = "Chatter";
-            this.Text = "Chatter V1.5.1";
+            this.Text = "Chatter V1.6.0";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Chatter_FormClosing);
             this.Load += new System.EventHandler(this.Chatter_Load);
             this.groupBoxTop.ResumeLayout(false);
@@ -188,7 +210,10 @@
             this.splitContainer1.Panel2.ResumeLayout(false);
             ((System.ComponentModel.ISupportInitialize)(this.splitContainer1)).EndInit();
             this.splitContainer1.ResumeLayout(false);
+            this.toolStripDisplay.ResumeLayout(false);
+            this.toolStripDisplay.PerformLayout();
             this.ResumeLayout(false);
+            this.PerformLayout();
 
         }
 
@@ -203,6 +228,8 @@
         private System.Windows.Forms.SplitContainer splitContainer1;
         private System.Windows.Forms.RichTextBox richTextBoxChatIn;
         private System.Windows.Forms.Button buttonConnect;
+        private System.Windows.Forms.ToolStrip toolStripDisplay;
+        private System.Windows.Forms.ToolStripLabel toolStripLabelDisplay;
     }
 }
 
