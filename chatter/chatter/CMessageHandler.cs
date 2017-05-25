@@ -26,9 +26,10 @@ namespace chatter
         private bool _completed = false;
         private string _buddyIp = "";
 
-        public CMessageHandler(string name)
+        public CMessageHandler(string name, string buddy)
         {
             _name = name;
+            _buddyIp = buddy;
         }
 
         public ManualResetEvent SendDone = new ManualResetEvent(false);
@@ -36,7 +37,7 @@ namespace chatter
 
         public MessageEventArgs PumpMessageFromRemote(string data, out string buddyIp, out bool isTyping)
         {
-            // typing helpers
+            // typing detection helpers
             buddyIp = _buddyIp;
             if (data.Contains('\t'))
                 isTyping = true;
@@ -58,8 +59,8 @@ namespace chatter
                     MessageEventArgs mea = new MessageEventArgs(localMsg);
                     if (mea.Valid)
                     {
-                        // for typing ref
-                        buddyIp = _buddyIp = mea.FriendIP;
+                        // for safety
+                        _buddyIp = mea.FriendIP;
 
                         // this was a reply ACK?
                         if (currentId == mea.Id)

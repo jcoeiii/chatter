@@ -181,7 +181,7 @@ namespace chatter
             debug("Server thread launched");
             try
             {
-                CMessageHandler m = new CMessageHandler("ServerMH");
+                CMessageHandler m = new CMessageHandler("ServerMH", buddyIp);
                 int timeout = 0;
 
                 if (!ipBuddyMessages.ContainsKey(buddyIp))
@@ -344,7 +344,7 @@ namespace chatter
                 if (!ipBuddyIsTyping.ContainsKey(buddyIp))
                     ipBuddyIsTyping.Add(buddyIp, false);
 
-                CMessageHandler m = new CMessageHandler("ClientMH");
+                CMessageHandler m = new CMessageHandler("ClientMH", buddyIp);
 
                 // Enter the working loop
                 while (stayAlive)
