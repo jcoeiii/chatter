@@ -215,11 +215,14 @@ namespace chatter
                     if (state == CMessageHandler.MsgState.ReadyForRemote)
                     {
 #if (DEBUG)
-                        m.InjectTestMessage(";S" + timeout);
+                        //m.InjectTestMessage(";S" + timeout);
 #endif
                         debug("Server sent out msg to " + buddyIp);
 
-                        send(handler, m.MessageReady, m);
+                        string message = m.MessageReady;
+
+                        send(handler, message, m);
+                        m.SendDone.WaitOne(500);
                     }
                     else
                     {
@@ -227,8 +230,9 @@ namespace chatter
                             send(handler, "\t", m);
                         else
                             send(handler, " ", m);
+                        m.SendDone.WaitOne(500);
                     }
-                    m.SendDone.WaitOne(500);
+                    
 
                     if (!receive(handler, m))
                         timeout++;
@@ -245,7 +249,7 @@ namespace chatter
             catch (Exception e)
             {
                 debug("Server exception for " + buddyIp + e.ToString());
-                if (_debug != null)
+                if (_debug != null  && ipBuddyFullNameLookup.ContainsKey(buddyIp))
                     _debug.InjectTestMessage("User aborted: " + ipBuddyFullNameLookup[buddyIp]);
             }
 
@@ -369,11 +373,14 @@ namespace chatter
                     if (state == CMessageHandler.MsgState.ReadyForRemote)
                     {
 #if (DEBUG)
-                        m.InjectTestMessage(":C" + timeout);
+                        //m.InjectTestMessage(":C" + timeout);
 #endif
                         debug("Client sent out msg to " + buddyIp);
 
-                        send(sender, m.MessageReady, m);
+                        string message = m.MessageReady;
+
+                        send(sender, message, m);
+                        m.SendDone.WaitOne(500);
                     }
                     else
                     {
@@ -381,8 +388,8 @@ namespace chatter
                             send(sender, "\t", m);
                         else
                             send(sender, " ", m);
+                        m.SendDone.WaitOne(500);
                     }
-                    m.SendDone.WaitOne(500);
 
 
                     if (!receive(sender, m))
@@ -400,8 +407,8 @@ namespace chatter
             catch (Exception e)
             {
                 debug("Client exception for " + buddyIp + e.ToString());
-                if (_debug != null)
-                    _debug.InjectTestMessage("User aborted: " + ipBuddyFullNameLookup[buddyIp]);
+                if (_debug != null && ipBuddyFullNameLookup.ContainsKey(buddyIp))
+                        _debug.InjectTestMessage("User aborted: " + ipBuddyFullNameLookup[buddyIp]);
             }
 
             lock (ipsInUse)
@@ -753,7 +760,7 @@ namespace chatter
         // Client socket.  
         public Socket workSocket = null;
         // Size of receive buffer.  
-        public const int BufferSize = 256;
+        public const int BufferSize = 1024*1000;
         // Receive buffer.  
         public byte[] buffer = new byte[BufferSize];
         // Received data string.  

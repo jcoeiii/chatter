@@ -47,60 +47,63 @@ namespace chatter
             if (!String.IsNullOrEmpty(data))
             {
                 // build local message up
-                _buildMsg.Append(data);
-
-                string localMsg = _buildMsg.ToString();
-                int myIndex = localMsg.IndexOf("<EOF>");
-                if (myIndex > -1)
+                lock (_buildMsg)
                 {
-                    localMsg = localMsg.Substring(0, myIndex + 1 + 4).Trim();
-                    _buildMsg.Remove(0, myIndex + 1 + 4);
-
-                    MessageEventArgs mea = new MessageEventArgs(localMsg);
-                    if (mea.Valid)
+                    _buildMsg.Append(data);
+                }
+                lock (_buildMsg)
+                {
+                    string localMsg = _buildMsg.ToString();
+                    int myIndex = localMsg.IndexOf("<EOF>");
+                    if (myIndex > -1)
                     {
-                        // for safety
-                        _buddyIp = mea.FriendIP;
+                        localMsg = localMsg.Substring(0, myIndex + 1 + 4).Trim();
+                        _buildMsg.Remove(0, myIndex + 1 + 4);
 
-                        // this was a reply ACK?
-                        if (currentId == mea.Id)
+                        MessageEventArgs mea = new MessageEventArgs(localMsg);
+                        if (mea.Valid)
                         {
-                            Sock.debug(_name + ":got ACK:" + this._state.ToString() + ":Id=" + mea.Id); 
-                            this._completed = true;
-                            if (this._waitingForResponse)
-                            {
-                                this._waitingForResponse = false;
-                                this._state = MsgState.Idle;
-                            }
-                            return null; // don't send a repeat back to the user screen
-                        }
-                        else
-                        {
-                            _lastAckMsg = generate(mea.Id, mea.FriendName, mea.FriendIP, ""); // no need to send entire msg payload
-                            _lastAckIP = mea.FriendIP;
+                            // for safety
+                            _buddyIp = mea.FriendIP;
 
-                            if (!this._waitingForResponse)
+                            // this was a reply ACK?
+                            if (currentId == mea.Id)
                             {
-                                Sock.debug(_name + ":AppendAck:Current=" + currentId + ":Id=" + mea.Id);
-                                this._state = MsgState.AppendAck;
+                                Sock.debug(_name + ":got ACK:" + this._state.ToString() + ":Id=" + mea.Id);
+                                this._completed = true;
+                                if (this._waitingForResponse)
+                                {
+                                    this._waitingForResponse = false;
+                                    this._state = MsgState.Idle;
+                                }
+                                return null; // don't send a repeat back to the user screen
                             }
                             else
                             {
-                                Sock.debug(_name + ":Msg:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
-                            }
-                        }
-                        return mea;
-                    }
-                    else
-                        Sock.debug(_name + ": oops, invalid message received");
-                }
-                else if (_buildMsg.Length > 250 && localMsg == "")
-                    _buildMsg.Clear();
-            }
+                                _lastAckMsg = generate(mea.Id, mea.FriendName, mea.FriendIP, ""); // no need to send entire msg payload
+                                _lastAckIP = mea.FriendIP;
 
+                                if (!this._waitingForResponse)
+                                {
+                                    Sock.debug(_name + ":AppendAck:Current=" + currentId + ":Id=" + mea.Id);
+                                    this._state = MsgState.AppendAck;
+                                }
+                                else
+                                {
+                                    Sock.debug(_name + ":Msg:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
+                                }
+                            }
+                            return mea;
+                        }
+                        else
+                            Sock.debug(_name + ": oops, invalid message received");
+                    }
+                    else if (_buildMsg.Length > 5000 && localMsg == "")
+                        _buildMsg.Clear();
+                }
+            }
             return null;
         }
-
 
         public MsgState ProcessStates()
         {
@@ -133,6 +136,8 @@ namespace chatter
                     }
                     else if (!this._waitingForResponse)
                     {
+                        if (this._msg2Go.Length > 1024)
+                            this._attempt = 255; // abort resend for large msg
                         this._waitingForResponse = true;
                         this._state = MsgState.WaitingResponse;
                     }
@@ -142,7 +147,7 @@ namespace chatter
                 case MsgState.WaitingResponse:
                     // message was already sent out, check timeout
                     DateTime endTime = DateTime.Now;
-                    if (endTime.Subtract(this._startTime).Milliseconds >= 700)
+                    if (endTime.Subtract(this._startTime).Milliseconds >= 2000)
                     {
                         Sock.debug(_name + ": timeout, repeating");
                         this._waitingForResponse = false;
@@ -208,8 +213,8 @@ namespace chatter
 
         private static string generate(string id, string me, string ip, string msg)
         {
-            //     id    | from name| from IP  | text data message       with EOF termination
-            return id + "|" + me + "|" + ip + "|" + msg.Replace("|", "~") + "<EOF>";
+            //      |    id    | from name| from IP  | text data message       with EOF termination
+            return "|" + id + "|" + me + "|" + ip + "|" + msg.Replace("|", "~") + "<EOF>";
         }
     }
 }

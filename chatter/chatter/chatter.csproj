@@ -23,7 +23,6 @@
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <PlatformTarget>AnyCPU</PlatformTarget>
@@ -33,7 +32,6 @@
     <DefineConstants>TRACE</DefineConstants>
     <ErrorReport>prompt</ErrorReport>
     <WarningLevel>4</WarningLevel>
-    <Prefer32Bit>false</Prefer32Bit>
   </PropertyGroup>
   <PropertyGroup>
     <ApplicationIcon>smile.ico</ApplicationIcon>
@@ -53,6 +51,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CMessageHandler.cs" />
+    <Compile Include="CompressString.cs" />
     <Compile Include="CSavedIPs.cs" />
     <Compile Include="FormChatter.cs">
       <SubType>Form</SubType>
