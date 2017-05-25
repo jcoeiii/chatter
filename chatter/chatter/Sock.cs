@@ -451,13 +451,9 @@ namespace chatter
 
                 if (bytesRead > 0)
                 {
-                    // There might be more data, so store the data received so far.  
-                    //state.sb.Append(Encoding.ASCII.GetString(state.buffer, 0, bytesRead));
-
                     string buddyIp;
                     bool isBuddyTyping;
                     MessageEventArgs mea = state.m.PumpMessageFromRemote(Encoding.ASCII.GetString(state.buffer, 0, bytesRead), out buddyIp, out isBuddyTyping);
-                    //state.sb.Clear();
 
                     if (!String.IsNullOrWhiteSpace(buddyIp))
                         ipBuddyIsTyping[buddyIp] = isBuddyTyping;
@@ -477,35 +473,10 @@ namespace chatter
                     // Get the rest of the data.  
                     client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
                 }
-
-
-                // data has arrived; pump into response builder.  
-                //if (state.sb.Length > 1)
-                //{
-                //    string buddyIp;
-                //    bool isBuddyTyping;
-                //    MessageEventArgs mea = state.m.PumpMessageFromRemote(state.sb.ToString(), out buddyIp, out isBuddyTyping);
-                //    state.sb.Clear();
-
-                //    if (!String.IsNullOrWhiteSpace(buddyIp))
-                //        ipBuddyIsTyping[buddyIp] = isBuddyTyping;
-
-                //    if (mea != null)
-                //    {
-                //        ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
-                //        OnNewDataReceived(mea);
-
-                //        // Update good ip list as needed
-                //        CSavedIPs.AppendIP(mea.FriendIP);
-
-                //        // Signal that all bytes have been received.
-                //        state.m.ReceiveDone.Set();
-                //    }
-                //}
             }
             catch (Exception e)
             {
-                Console.WriteLine(e.ToString());
+                debug(e.ToString());
             }
         }
 

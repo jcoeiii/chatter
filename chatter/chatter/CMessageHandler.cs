@@ -18,6 +18,7 @@ namespace chatter
         private Queue<string> _msgs2Send = new Queue<string>();
         private StringBuilder _buildMsg = new StringBuilder();
         private string _lastAckMsg = "";
+        private string _lastAckIP = "";
         private bool _ackWasSent = false;
         private string currentId = "";
         private DateTime _startTime;
@@ -63,13 +64,19 @@ namespace chatter
                         // this was a reply ACK?
                         if (currentId == mea.Id)
                         {
-                            Sock.debug(_name + ":got ACK:" + this._state.ToString() + ":Id=" + mea.Id);
-                            mea = null; // don't send a repeat back to the user screen
+                            Sock.debug(_name + ":got ACK:" + this._state.ToString() + ":Id=" + mea.Id); 
                             this._completed = true;
+                            if (this._waitingForResponse)
+                            {
+                                this._waitingForResponse = false;
+                                this._state = MsgState.Idle;
+                            }
+                            return null; // don't send a repeat back to the user screen
                         }
                         else
                         {
                             _lastAckMsg = generate(mea.Id, mea.FriendName, mea.FriendIP, ""); // no need to send entire msg payload
+                            _lastAckIP = mea.FriendIP;
 
                             if (!this._waitingForResponse)
                             {
@@ -114,7 +121,7 @@ namespace chatter
                     break;
 
                 case MsgState.ReadyForRemote:
-                    if (this._attempt >= 3)
+                    if (this._attempt >= 3 || this._completed)
                     {
                         this._state = MsgState.Idle;
                     }
@@ -123,24 +130,20 @@ namespace chatter
                         this._ackWasSent = false;
                         this._state = MsgState.Idle;
                     }
-                    else if (this._waitingForResponse)
+                    else if (!this._waitingForResponse)
                     {
                         this._waitingForResponse = true;
                         this._state = MsgState.WaitingResponse;
                     }
-                    else if (this._completed)
-                    {
-                        this._state = MsgState.Idle;
-                    }
-
                     this._attempt++;
                     break;
 
                 case MsgState.WaitingResponse:
                     // message was already sent out, check timeout
                     DateTime endTime = DateTime.Now;
-                    if (endTime.Subtract(this._startTime).Milliseconds >= 400)
+                    if (endTime.Subtract(this._startTime).Milliseconds >= 700)
                     {
+                        Sock.debug(_name + ": timeout, repeating");
                         this._waitingForResponse = false;
                         this._state = MsgState.ReadyForRemote;
                     }
@@ -150,6 +153,7 @@ namespace chatter
                     // force one shot ACK
                     this._attempt = 0;
                     this._ackWasSent = true;
+                    this.currentId = this._lastAckIP;
                     this._msg2Go = this._lastAckMsg;
                     this._state = MsgState.ReadyForRemote;
                     break;
