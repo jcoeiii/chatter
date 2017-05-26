@@ -9,5 +9,5 @@ This is a Peer-to-Peer chatting example in C# using TCP/IP sockets.  Just for fu
 
 # Issues and Needed Improvements:
 -	File links in the RickTextBox do not scroll but are fixed; another method or custom RichTextBox for custom links needs to be implemented.
--	Files dropped are sent in bulk in one message which means it limits the file size based on memory; needs to actually scream the file(s) and then save them to disk on the receiving side which memory will no longer be a concern.
+-	Files dropped are sent in bulk in one message which means it limits the file size based on memory; needs to actually stream the file(s) and then save them to disk on the receiving side which memory will no longer be a concern.
 -	If files are saved locally, the links in the RichTextBox can stay and not be one-shots.
