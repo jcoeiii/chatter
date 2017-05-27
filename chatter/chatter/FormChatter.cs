@@ -10,6 +10,7 @@ using System.Windows.Forms;
 
 using System.Runtime.InteropServices;
 using System.IO;
+using System.Threading;
 
 namespace chatter
 {
@@ -17,6 +18,8 @@ namespace chatter
     {
         [DllImport("user32.dll")]
         public static extern int FlashWindow(IntPtr Hwnd, bool Revert);
+
+        #region Constructor
 
         public Chatter()
         {
@@ -35,9 +38,14 @@ namespace chatter
             string ipFirst = (split != null && split.Count() > 0) ? split[0] : "10.0.0";
 
             Sock.NewData += Sock_NewDataReceivedEventHandler;
+            Sock.Ack += Sock_Ack;
             myIP = Sock.GetIPAddress(ipFirst);
             this.groupBoxBottom.Text = "My IP: " + myIP;
         }
+
+        #endregion
+
+        #region Form Load Event
 
         private void Chatter_Load(object sender, EventArgs e)
         {
@@ -58,23 +66,40 @@ namespace chatter
             this._lastTyped.Start();
         }
 
+        #endregion
+
+        #region Form Closing Event
+
+        private void Chatter_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            CSavedIPs.ChangeSubList(this.textBoxSubs.Text);
+            this.isExit = true;
+            // temp file cleanup
+            try
+            {
+                foreach (string key in linkList.Keys)
+                    if (File.Exists(linkList[key]))
+                        File.Delete(linkList[key]);
+            }
+            catch
+            { }
+
+            Sock.KillTasks();
+        }
+
+        #endregion
+
         private bool isExit = false;
         private string userName;
         private string myIP;
         private Dictionary<string, string> buddyList = new Dictionary<string, string>();
-        private Timer _lastTyped = new Timer();
+        private System.Windows.Forms.Timer _lastTyped = new System.Windows.Forms.Timer();
+        private Dictionary<string, string> currentTempFile = new Dictionary<string, string>();
+        private Dictionary<string, string> currentChunk = new Dictionary<string, string>();
+        private Dictionary<string, int> currentChunkId = new Dictionary<string, int>();
+        private Dictionary<string, string> linkList = new Dictionary<string, string>();
 
-        public void EnableGoButton()
-        {
-            if (!isExit)
-            {
-                this.Invoke((MethodInvoker)delegate
-                {
-                    this.buttonGoConnection.Enabled = true;
-                    appendText(richTextBoxChatOut, "Finished Search." + Environment.NewLine, Color.LightGreen);
-                });
-            }
-        }
+        #region Sock Events
 
         private void Sock_NewDataReceivedEventHandler(MessageEventArgs e)
         {
@@ -84,9 +109,9 @@ namespace chatter
                 {
                     if (this.comboBoxUsers.Items.Contains(e.FriendName))
                     {
-                    //    int index = this.comboBoxUsers.Items.IndexOf(e.FriendName);
-                    //    if (index > -1)
-                    //        this.comboBoxUsers.SelectedIndex = index;
+                        //    int index = this.comboBoxUsers.Items.IndexOf(e.FriendName);
+                        //    if (index > -1)
+                        //        this.comboBoxUsers.SelectedIndex = index;
                     }
                     else
                     {
@@ -104,28 +129,51 @@ namespace chatter
 
                     if (e.IsFile)
                     {
-                        appendText(richTextBoxChatOut, e.FriendName + ":\t", Color.LightGreen);
+                        if (e.ChunkId == -1)
+                        {
+                            if (currentChunkId[e.FriendIP] != -1)
+                            {
+                                byte[] data = StringCompressor.ToHexBytes(currentChunk[e.FriendIP]);
 
-                        LinkLabel link = new LinkLabel();
-                        link.Text = e.FileName;
-                        link.Name = e.FileName;
-                        
-                        link.LinkClicked += new LinkLabelLinkClickedEventHandler(this.link_LinkClicked);
+                                if (!File.Exists(currentTempFile[e.FriendIP]))
+                                    File.WriteAllBytes(currentTempFile[e.FriendIP], data);
+                                else
+                                    appendAllBytes(currentTempFile[e.FriendIP], data);
+                            }
 
-                        LinkLabel.Link data = new LinkLabel.Link();
-                        data.LinkData = e.FileData;
-                        link.Links.Add(data);
-                        link.AutoSize = true;
-                        
-                        appendText(richTextBoxChatOut, "File waiting: ", Color.Red);
+                            appendText(richTextBoxChatOut, e.FriendName + ":\tSent a file->File_Waiting: ", Color.LightGreen);
+                            richTextBoxChatOut.InsertLink(e.FileName + "   ");
+                            if (linkList.ContainsKey(e.FileName + "   "))
+                                linkList[e.FileName + "   "] = currentTempFile[e.FriendIP];
+                            else
+                                linkList.Add(e.FileName + "   ", currentTempFile[e.FriendIP]);
+                            richTextBoxChatOut.AppendText("      " + Environment.NewLine);
+                            richTextBoxChatOut.ScrollToCaret();
+                        }
+                        else
+                        {
+                            if (e.ChunkId == 0)
+                            {
+                                currentTempFile[e.FriendIP] = Path.GetTempFileName();
+                                currentChunk[e.FriendIP] = e.FileData;
+                                currentChunkId[e.FriendIP] = 0;
+                            }
+                            else
+                            {
+                                // if this is a different chunk than before write it out
+                                if (currentChunkId[e.FriendIP] != e.ChunkId)
+                                {
+                                    byte[] data = StringCompressor.ToHexBytes(currentChunk[e.FriendIP]);
 
-                        link.Location = this.richTextBoxChatOut.GetPositionFromCharIndex(this.richTextBoxChatOut.TextLength);
-                        richTextBoxChatOut.Controls.Add(link);
-                        richTextBoxChatOut.AppendText(e.FileName + "   " + Environment.NewLine);
-
-                        //richTextBoxChatOut.SelectionStart = this.richTextBoxChatOut.TextLength;
-
-                        richTextBoxChatOut.ScrollToCaret();
+                                    if (!File.Exists(currentTempFile[e.FriendIP]))
+                                        File.WriteAllBytes(currentTempFile[e.FriendIP], data);
+                                    else
+                                        appendAllBytes(currentTempFile[e.FriendIP], data);
+                                }
+                                currentChunk[e.FriendIP] = e.FileData;
+                                currentChunkId[e.FriendIP] = e.ChunkId;
+                            }
+                        }
                     }
                     else
                     {
@@ -142,24 +190,28 @@ namespace chatter
             });
         }
 
-        private void link_LinkClicked(object sender, LinkLabelLinkClickedEventArgs e)
+        #endregion
+
+        #region General Helpers
+
+        public void EnableGoButton()
         {
-            //System.Diagnostics.Process.Start(e.Link.Text.ToString());
-
-            // Displays a SaveFileDialog so the user can save the Image  
-            // assigned to Button2.  
-            SaveFileDialog saveFileDialog1 = new SaveFileDialog();
-            saveFileDialog1.FileName = ((LinkLabel)sender).Name;
-            //saveFileDialog1.Filter = "JPeg Image|*.jpg|Bitmap Image|*.bmp|Gif Image|*.gif";
-            saveFileDialog1.Title = "Save File";
-
-            // If the file name is not an empty string open it for saving.  
-            if (saveFileDialog1.ShowDialog() == DialogResult.OK && saveFileDialog1.FileName != "")
+            if (!isExit)
             {
-                File.WriteAllBytes(saveFileDialog1.FileName, (byte[])e.Link.LinkData);
+                this.Invoke((MethodInvoker)delegate
+                {
+                    this.buttonGoConnection.Enabled = true;
+                    appendText(richTextBoxChatOut, "Finished Search." + Environment.NewLine, Color.LightGreen);
+                });
             }
+        }
 
-            richTextBoxChatOut.Controls.Remove((Control)sender);
+        static private void appendAllBytes(string path, byte[] bytes)
+        {
+            using (var stream = new FileStream(path, FileMode.Append))
+            {
+                stream.Write(bytes, 0, bytes.Length);
+            }
         }
 
         private void appendText(RichTextBox box, string text, Color color)//, Font font)
@@ -172,6 +224,10 @@ namespace chatter
             box.AppendText(text);
             box.SelectionColor = box.ForeColor;
         }
+
+        #endregion
+
+        #region Form Control Events
 
         private void richTextBoxChat_KeyPress(object sender, KeyPressEventArgs e)
         {
@@ -244,13 +300,6 @@ namespace chatter
             }
         }
 
-        private void Chatter_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            CSavedIPs.ChangeSubList(this.textBoxSubs.Text);
-            this.isExit = true;
-            Sock.KillTasks();
-        }
-
         private void buttonGoConnection_Click(object sender, EventArgs e)
         {
             CSavedIPs.ChangeSubList(this.textBoxSubs.Text);
@@ -273,32 +322,33 @@ namespace chatter
             }
         }
 
-        public void InjectTestMessage(string msg)
-        {
-            if (!isExit)
-            {
-                try
-                {
-                    this.Invoke((MethodInvoker)delegate
-                    {
-                        if (!isExit)
-                        {
-                            appendText(richTextBoxChatOut, "Debug:\t\t", Color.LightGreen);
-                        }
-                        if (!isExit)
-                        {
-                            appendText(richTextBoxChatOut, msg + Environment.NewLine, Color.LightGray);
-                        }
-                    });
-                }
-                catch { }
-            }
-        }
-
         private void richTextBoxChatOut_LinkClicked(object sender, LinkClickedEventArgs e)
         {
-            // enable html tags to display in browser
-            System.Diagnostics.Process.Start(e.LinkText);
+            if (String.IsNullOrEmpty(e.LinkText))
+            {
+            }
+            else if (linkList.ContainsKey(e.LinkText))
+            {
+                SaveFileDialog saveFileDialog1 = new SaveFileDialog();
+                saveFileDialog1.FileName = e.LinkText.TrimEnd();
+                saveFileDialog1.Title = "Save File";
+
+                // If the file name is not an empty string open it for saving.  
+                if (saveFileDialog1.ShowDialog() == DialogResult.OK && saveFileDialog1.FileName != "")
+                {
+                    try
+                    {
+                        File.Copy(linkList[e.LinkText], saveFileDialog1.FileName);
+                    }
+                    catch
+                    { }
+                }
+            }
+            else
+            {
+                // enable html tags to display in browser
+                System.Diagnostics.Process.Start(e.LinkText);
+            }
         }
 
         private void richTextBoxChatOut_MouseUp(object sender, MouseEventArgs e)
@@ -360,7 +410,7 @@ namespace chatter
             _lastTyped.Start();
         }
 
-        void _lastTyped_Tick(object sender, EventArgs e)
+        private void _lastTyped_Tick(object sender, EventArgs e)
         {
             Sock.MyTypingStatus(false);
             updateToolStrip();
@@ -403,43 +453,124 @@ namespace chatter
             {
                 var files = (string[])e.Data.GetData(DataFormats.FileDrop);
 
-                foreach (string filepath in files)
+                if (buddyList.ContainsKey(this.comboBoxUsers.Text))
                 {
-                    try
-                    {
-                        if (buddyList.ContainsKey(this.comboBoxUsers.Text))
-                        {
-                            FileStream stream = new FileStream(filepath, FileMode.Open, FileAccess.Read);
+                    appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
+                    appendText(richTextBoxChatOut, "Sending File: " + files[0] + Environment.NewLine, Color.LightSalmon);
+                    richTextBoxChatOut.ScrollToCaret();
 
-                            // make message for file object
-                            using (var ms = new MemoryStream())
-                            {
-                                stream.CopyTo(ms);
-                                byte[] bytes = ms.ToArray();
-                                string fileData = StringCompressor.ToHexString(bytes);
-                                 
-                                if (fileData.Length < 1024 * 10000)
-                                { 
-                                    string m = "<OBJECT>" + "FILE\t" + Path.GetFileName(filepath) + "\t" + fileData;
+                    string ip = buddyList[this.comboBoxUsers.Text];
+                    string fullname = this.comboBoxUsers.Text;
 
-                                    Sock.SendToBuddy(userName, false, buddyList[this.comboBoxUsers.Text], this.comboBoxUsers.Text, m, null);
-                                    appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
-                                    appendText(richTextBoxChatOut, "File sent : " + filepath + Environment.NewLine, Color.LightSalmon);
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        appendText(richTextBoxChatOut, "ERROR: " + filepath  + ":" + ex.ToString() + Environment.NewLine, Color.LightGreen);
-                    }
-                    finally
-                    {
-                        // scroll it automatically
-                        richTextBoxChatOut.ScrollToCaret();
-                    }
+                    Task.Factory.StartNew(() => dotheFileXfer(files[0], ip, fullname));
                 }
             }
         }
+
+        #endregion
+
+        #region File Drag & Drop Stream Helpers
+
+        private void dotheFileXfer(string filepath, string ip, string fullname)
+        {
+            try
+            {
+                using (Stream source = File.OpenRead(filepath))
+                {
+                    byte[] buffer = new byte[1024 * 4];
+                    int bytesRead;
+                    int chunkCount = 0;
+
+                    while ((bytesRead = source.Read(buffer, 0, buffer.Length)) > 0)
+                    {
+                        if (isExit)
+                            return;
+
+                        if (!handleFileIO(buffer, bytesRead, filepath, chunkCount++, ip, fullname))
+                            throw new Exception("file transfer errors on chunk: " + chunkCount);
+
+                        if (chunkCount % 3 == 0)
+                            InjectTestMessage("Working...");
+                    }
+
+                    // send end of file confirmation
+                    buffer = new byte[0];
+                    if (!handleFileIO(buffer, 0, filepath, -1, ip, fullname))
+                        if (!handleFileIO(buffer, 0, filepath, -1, ip, fullname))
+                            throw new Exception("file transfer errors on chunk: " + chunkCount);
+
+                    InjectTestMessage("Completed.");
+                }
+            }
+            catch (Exception ex)
+            {
+                InjectTestMessage("ERROR: " + filepath + ":" + ex.ToString());
+            }
+        }
+
+        private MessageEventArgs _e = null;
+        private ManualResetEvent AckDone = new ManualResetEvent(false);
+        private void Sock_Ack(MessageEventArgs e)
+        {
+            _e = e;
+            AckDone.Set();
+        }
+
+        private bool handleFileIO(byte[] buffer, int length, string filepath, int chunk, string ip, string fullname)
+        {
+            string fileData = StringCompressor.ToHexString(buffer, length);
+            string m = "<OBJECT>" + "FILE*" + chunk.ToString() + "*" + Path.GetFileName(filepath) + "*" + fileData;
+            string chk = Sock.Checksum(Sock.Checksum(m)); // do it twice, trust me
+
+            _e = null;
+            AckDone.Reset();
+            Sock.SendToBuddy(userName, false, ip, fullname, m, null);
+
+            // wait for confirmations
+            AckDone.WaitOne(5000);
+
+            if (!isExit && (_e == null || !_e.Valid || _e.Checksum != chk))
+            {
+                // try to repeat once
+                _e = null;
+                AckDone.Reset();
+                Sock.SendToBuddy(userName, false, ip, fullname, m, null);
+                // wait for confirmations
+                AckDone.WaitOne(5000);
+
+                if (_e == null || !_e.Valid || _e.Checksum != chk)
+                    return false;
+            }
+
+            return true;
+        }
+
+        #endregion
+
+        #region Debug Helper
+
+        public void InjectTestMessage(string msg)
+        {
+            if (!isExit)
+            {
+                try
+                {
+                    this.Invoke((MethodInvoker)delegate
+                    {
+                        if (!isExit)
+                        {
+                            appendText(richTextBoxChatOut, "Debug:\t\t", Color.LightGreen);
+                        }
+                        if (!isExit)
+                        {
+                            appendText(richTextBoxChatOut, msg + Environment.NewLine, Color.LightGray);
+                        }
+                    });
+                }
+                catch { }
+            }
+        }
+
+        #endregion
     }
 }

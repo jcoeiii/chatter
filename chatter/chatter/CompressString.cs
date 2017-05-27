@@ -29,7 +29,7 @@ namespace chatter
             var gZipBuffer = new byte[compressedData.Length + 4];
             Buffer.BlockCopy(compressedData, 0, gZipBuffer, 4, compressedData.Length);
             Buffer.BlockCopy(BitConverter.GetBytes(buffer.Length), 0, gZipBuffer, 0, 4);
-            return ToHexString(gZipBuffer);
+            return ToHexString(gZipBuffer, gZipBuffer.Length);
         }
 
         /// <summary>
@@ -58,15 +58,15 @@ namespace chatter
             }
         }
 
-        public static string ToHexString(this byte[] hex)
+        public static string ToHexString(this byte[] hex, int length)
         {
             if (hex == null) return null;
             if (hex.Length == 0) return string.Empty;
 
             var s = new StringBuilder();
-            foreach (byte b in hex)
+            for (int i = 0; i < length; i++)
             {
-                s.Append(b.ToString("x2"));
+                s.Append(hex[i].ToString("x2"));
             }
             return s.ToString();
         }

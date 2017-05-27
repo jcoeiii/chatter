@@ -36,7 +36,7 @@
             this.textBoxSubs = new System.Windows.Forms.TextBox();
             this.groupBoxBottom = new System.Windows.Forms.GroupBox();
             this.splitContainer1 = new System.Windows.Forms.SplitContainer();
-            this.richTextBoxChatOut = new System.Windows.Forms.RichTextBox();
+            this.richTextBoxChatOut = new chatter.RichTextBoxEx();
             this.richTextBoxChatIn = new System.Windows.Forms.RichTextBox();
             this.toolStripDisplay = new System.Windows.Forms.ToolStrip();
             this.toolStripLabelDisplay = new System.Windows.Forms.ToolStripLabel();
@@ -144,6 +144,7 @@
             // richTextBoxChatOut
             // 
             this.richTextBoxChatOut.BackColor = System.Drawing.SystemColors.InfoText;
+            this.richTextBoxChatOut.DetectUrls = true;
             this.richTextBoxChatOut.Dock = System.Windows.Forms.DockStyle.Fill;
             this.richTextBoxChatOut.EnableAutoDragDrop = true;
             this.richTextBoxChatOut.ForeColor = System.Drawing.Color.LightGreen;
@@ -205,7 +206,7 @@
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.Margin = new System.Windows.Forms.Padding(3, 2, 3, 2);
             this.Name = "Chatter";
-            this.Text = "Chatter V1.6.2";
+            this.Text = "Chatter V1.6.3";
             this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.Chatter_FormClosing);
             this.Load += new System.EventHandler(this.Chatter_Load);
             this.DragDrop += new System.Windows.Forms.DragEventHandler(this.Chatter_DragDrop);
@@ -230,7 +231,7 @@
         private System.Windows.Forms.ComboBox comboBoxUsers;
         private System.Windows.Forms.TextBox textBoxSubs;
         private System.Windows.Forms.GroupBox groupBoxBottom;
-        private System.Windows.Forms.RichTextBox richTextBoxChatOut;
+        private RichTextBoxEx richTextBoxChatOut;
         private System.Windows.Forms.Button buttonGoConnection;
         private System.Windows.Forms.SplitContainer splitContainer1;
         private System.Windows.Forms.RichTextBox richTextBoxChatIn;

@@ -12,6 +12,7 @@ using System.Net.Sockets;
 
 using System.Threading;
 using System.IO;
+using System.Security.Cryptography;
 
 namespace chatter
 {
@@ -32,6 +33,8 @@ namespace chatter
         static private Dictionary<string, bool> ipBuddyIsTyping = new Dictionary<string, bool>();
         static private bool myTypingStatus = false;
         static private List<string> ipsInUse = new List<string>();
+
+        #region Public Events
 
         static public event NewDataReceivedEventHandler NewData;
         public delegate void NewDataReceivedEventHandler(MessageEventArgs e);
@@ -56,6 +59,31 @@ namespace chatter
             }
         }
 
+        static public event AckReceivedEventHandler Ack;
+        public delegate void AckReceivedEventHandler(MessageEventArgs e);
+
+        static protected void OnAckReceived(MessageEventArgs e)
+        {
+            AckReceivedEventHandler handler = Ack;
+
+            if (e.FriendIP != myIP)
+            {
+                return;
+            }
+
+            lock (handler)
+            {
+                if (handler != null)
+                {
+                    handler(e);
+                }
+            }
+        }
+
+        #endregion
+
+        #region Typing Detection Helpers
+
         static public void MyTypingStatus(bool status)
         {
             myTypingStatus = status;
@@ -79,6 +107,10 @@ namespace chatter
             }
         }
 
+        #endregion
+
+        #region General Startup Helpers
+
         static public bool SetSock(string myName, string ip, string subsList)
         {
             try
@@ -92,6 +124,26 @@ namespace chatter
             }
             catch { return false; }
         }
+
+        static public string GetIPAddress(string startWith)
+        {
+            IPHostEntry host;
+            string localIP = "?";
+            host = Dns.GetHostEntry(Dns.GetHostName());
+            foreach (IPAddress ip in host.AddressList)
+            {
+                if (ip.AddressFamily == AddressFamily.InterNetwork)
+                {
+                    if (ip.ToString().StartsWith(startWith))
+                        localIP = ip.ToString();
+                }
+            }
+            return localIP;
+        }
+
+        #endregion
+
+        #region Thread Helpers
 
         static public void KillTasks()
         {
@@ -111,6 +163,28 @@ namespace chatter
             threadRunningCount--;
             debug("Thread count = " + threadRunningCount);
         }
+
+        static private bool checkForRunningThread(string buddyIp)
+        {
+            bool justAdded = false;
+            lock (ipsInUse)
+            {
+                if (ipsInUse.Contains(buddyIp))
+                {
+                    return false;
+                }
+                else
+                {
+                    ipsInUse.Add(buddyIp);
+                    justAdded = true;
+                }
+            }
+            return justAdded;
+        }
+
+        #endregion
+
+        #region Listening Socket Agent Thread
 
         static private void StartListening(IPHostEntry ipHostInfo)
         {
@@ -166,23 +240,25 @@ namespace chatter
                     debug("Listening agent exception: " + e.ToString());
                 }
 
-                Thread.Sleep(200);
+                Thread.Sleep(50);
             }
 
             //endThread();
         }
 
+        #endregion
+
+        #region Server Thread
+
         static private void StartServerSide(Socket handler, string buddyIp)
         {
             beginThread();
 
-            int waitingCount = 0;
-
+            Thread.Sleep(50);
             debug("Server thread launched");
             try
             {
-                CMessageHandler m = new CMessageHandler("ServerMH", buddyIp);
-                int timeout = 0;
+                CMessageHandler m = new CMessageHandler("ServerMH", buddyIp, myIP);
 
                 if (!ipBuddyMessages.ContainsKey(buddyIp))
                     ipBuddyMessages.Add(buddyIp, new Queue<string>());
@@ -190,33 +266,32 @@ namespace chatter
                 if (!ipBuddyIsTyping.ContainsKey(buddyIp))
                     ipBuddyIsTyping.Add(buddyIp, false);
 
+                ipBuddyMessages[buddyIp].Enqueue(CMessageHandler.GenerateMessage(myPCName, myIP, "Connected!"));
+
                 handler.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.KeepAlive, false);
 
                 // An incoming connection needs to be processed.  
                 while (stayAlive)
                 {
-                    if (timeout >= 30)
-                    {
-                        debug("Server timedout for " + buddyIp);
-                        break;
-                    }
-
-                    if (waitingCount <= 0 && ipBuddyMessages[buddyIp].Count > 0)
+                    if (ipBuddyMessages[buddyIp].Count > 0)
                     {
                         lock (ipBuddyMessages[buddyIp])
                         {
-                            m.AddMessageToSend(ipBuddyMessages[buddyIp].Dequeue());
+                            try
+                            {
+                                m.AddMessageToSend(ipBuddyMessages[buddyIp].Dequeue());
+                            }
+                            catch { }
                         }
                     }
 
-                    CMessageHandler.MsgState state = m.ProcessStates();
+                    MessageEventArgs mea;
+                    CMessageHandler.MsgState state = m.ProcessStates(out mea);
+                    messageHandling(m, mea);
 
                     // Write to Client as needed
-                    if (state == CMessageHandler.MsgState.ReadyForRemote)
+                    if (state == CMessageHandler.MsgState.ReadyForRemote || state == CMessageHandler.MsgState.SendAck)
                     {
-#if (DEBUG)
-                        //m.InjectTestMessage(";S" + timeout);
-#endif
                         debug("Server sent out msg to " + buddyIp);
 
                         string message = m.MessageReady;
@@ -232,17 +307,17 @@ namespace chatter
                             send(handler, " ", m);
                         m.SendDone.WaitOne(500);
                     }
-                    
+
 
                     if (!receive(handler, m))
-                        timeout++;
+                    {
+                        debug("Server error for " + buddyIp);
+                        break;
+                    }
                     else
                         m.ReceiveDone.WaitOne(500);
 
-                    if (waitingCount > 0)
-                        waitingCount--;
-
-                    Thread.Sleep(200);
+                    Thread.Sleep(50);
                     CSavedIPs.AppendIP(buddyIp);
                 }
             }
@@ -276,6 +351,10 @@ namespace chatter
             endThread();
         }
 
+        #endregion
+
+        #region Server Thread Launcher
+
         static public string StartServer()
         {
             // Establish the local endpoint for the socket.  
@@ -305,29 +384,41 @@ namespace chatter
             return CSavedIPs.Subs;
         }
 
-        static private bool checkForRunningThread(string buddyIp)
+        #endregion
+
+        #region Message Handling
+
+        static private void messageHandling(CMessageHandler m, MessageEventArgs mea)
         {
-            bool justAdded = false;
-            lock (ipsInUse)
+            if (mea == null)
             {
-                if (ipsInUse.Contains(buddyIp))
-                {
-                    return false;
-                }
-                else
-                {
-                    ipsInUse.Add(buddyIp);
-                    justAdded = true;
-                }
             }
-            return justAdded;
+            else if (mea.Valid && !String.IsNullOrWhiteSpace(mea.TextFromFriend))
+            {
+                ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
+                OnNewDataReceived(mea);
+                OnAckReceived(mea);
+
+                // Update good ip list as needed
+                CSavedIPs.AppendIP(mea.FriendIP);
+
+                // Signal that all bytes have been received.
+                m.ReceiveDone.Set();
+            }
+            else
+            {
+                OnAckReceived(mea);
+            }
         }
+
+        #endregion
+
+        #region Client Thread
 
         static public void StartClientSide(Socket sender, string buddyIp)
         {
             beginThread();
 
-            int timeout = 0;
             debug("Client thread launched");
 
             try
@@ -348,33 +439,32 @@ namespace chatter
                 if (!ipBuddyIsTyping.ContainsKey(buddyIp))
                     ipBuddyIsTyping.Add(buddyIp, false);
 
-                CMessageHandler m = new CMessageHandler("ClientMH", buddyIp);
+                ipBuddyMessages[buddyIp].Enqueue(CMessageHandler.GenerateMessage(myPCName, myIP, "Connected!"));
+
+                CMessageHandler m = new CMessageHandler("ClientMH", buddyIp, myIP);
 
                 // Enter the working loop
                 while (stayAlive)
                 {
-                    if (timeout >= 12)
-                    {
-                        debug("Client timed out for " + buddyIp);
-                        break;
-                    }
-
                     if (ipBuddyMessages[buddyIp].Count > 0)
                     {
                         lock (ipBuddyMessages[buddyIp])
                         {
-                            m.AddMessageToSend(ipBuddyMessages[buddyIp].Dequeue());
+                            try
+                            {
+                                m.AddMessageToSend(ipBuddyMessages[buddyIp].Dequeue());
+                            }
+                            catch { }
                         }
                     }
 
-                    CMessageHandler.MsgState state = m.ProcessStates();
+                    MessageEventArgs mea;
+                    CMessageHandler.MsgState state = m.ProcessStates(out mea);
+                    messageHandling(m, mea);
 
                     // Write to Server as needed
-                    if (state == CMessageHandler.MsgState.ReadyForRemote)
+                    if (state == CMessageHandler.MsgState.ReadyForRemote || state == CMessageHandler.MsgState.SendAck)
                     {
-#if (DEBUG)
-                        //m.InjectTestMessage(":C" + timeout);
-#endif
                         debug("Client sent out msg to " + buddyIp);
 
                         string message = m.MessageReady;
@@ -391,13 +481,15 @@ namespace chatter
                         m.SendDone.WaitOne(500);
                     }
 
-
                     if (!receive(sender, m))
-                        timeout++;
+                    {
+                        debug("Client error " + buddyIp);
+                        break;
+                    }
                     else
                         m.ReceiveDone.WaitOne(500);
 
-                    Thread.Sleep(200);
+                    Thread.Sleep(50);
                     CSavedIPs.AppendIP(buddyIp);
                 }
 
@@ -425,6 +517,62 @@ namespace chatter
             endThread();
         }
 
+        #endregion
+
+        #region Client Thread Launcher - a.k.a. Send to Buddy
+
+        static public bool SendToBuddy(string myName, bool forceReconnect, string buddyIp, string buddyFullName, string msg, Socket client)
+        {
+#if !DEBUG_LOOPBACK
+            if (buddyIp == myIP)
+                return true; // just ignore this situation
+#endif
+            string fullMsg = CMessageHandler.GenerateMessage(myName, myIP, msg);
+
+            if (client != null)
+            {
+#if DEBUG_LOOPBACK
+                if (ipBuddyMessages.Count > 0 && ipsInUse.Contains(buddyIp))
+                    return false;
+#else
+                if (ipsInUse.Contains(buddyIp))
+                    return false;
+#endif
+                // this is a new connection!
+                //if (!ipBuddyMessages.ContainsKey(buddyIp))
+                //    ipBuddyMessages.Add(buddyIp, new Queue<string>());
+                //ipBuddyMessages[buddyIp].Enqueue(fullMsg);
+
+                if (!String.IsNullOrEmpty(buddyFullName) && !ipBuddyFullNameLookup.ContainsKey(buddyIp))
+                    ipBuddyFullNameLookup[buddyIp] = buddyFullName;
+
+                debug("Client starting for " + buddyIp);
+                Task.Factory.StartNew(() => StartClientSide(client, buddyIp));
+            }
+            else
+            {
+                if (ipsInUse.Contains(buddyIp))
+                {
+                    lock (ipBuddyMessages[buddyIp])
+                    {
+                        ipBuddyMessages[buddyIp].Enqueue(fullMsg);
+                    }
+                }
+                else
+                {
+//#if !DEBUG_LOOPBACK
+                    //Task.Factory.StartNew(() => StartClientSide(buddyIp));
+//#endif
+                    return false; // signal that this message did not go thru
+                }
+            }
+            return true;
+        }
+
+        #endregion
+
+        #region Receive Asynchronous Callback
+
         static private bool receive(Socket client, CMessageHandler m)
         {
             try
@@ -439,7 +587,7 @@ namespace chatter
             }
             catch (Exception e)
             {
-                debug(e.ToString());
+                debug(m.Name + " " + e.ToString());
                 return false;
             }
         }
@@ -458,24 +606,12 @@ namespace chatter
 
                 if (bytesRead > 0)
                 {
+                    // pump message and detect user typing
                     string buddyIp;
                     bool isBuddyTyping;
-                    MessageEventArgs mea = state.m.PumpMessageFromRemote(Encoding.ASCII.GetString(state.buffer, 0, bytesRead), out buddyIp, out isBuddyTyping);
-
-                    if (!String.IsNullOrWhiteSpace(buddyIp))
+                    state.m.PumpMessageFromRemote(Encoding.ASCII.GetString(state.buffer, 0, bytesRead), out buddyIp, out isBuddyTyping);
+                    if (!String.IsNullOrWhiteSpace(buddyIp) && ipBuddyIsTyping.ContainsKey(buddyIp))
                         ipBuddyIsTyping[buddyIp] = isBuddyTyping;
-
-                    if (mea != null)
-                    {
-                        ipBuddyFullNameLookup[mea.FriendIP] = mea.FriendName;
-                        OnNewDataReceived(mea);
-
-                        // Update good ip list as needed
-                        CSavedIPs.AppendIP(mea.FriendIP);
-
-                        // Signal that all bytes have been received.
-                        state.m.ReceiveDone.Set();
-                    }
 
                     // Get the rest of the data.  
                     client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
@@ -486,6 +622,10 @@ namespace chatter
                 debug(e.ToString());
             }
         }
+
+        #endregion
+
+        #region Send Asynchronous Callback
 
         static private void send(Socket client, String data, CMessageHandler m)
         {
@@ -521,73 +661,10 @@ namespace chatter
             }
         }
 
-        static public bool SendToBuddy(string myName, bool forceReconnect, string buddyIp, string buddyFullName, string msg, Socket client)
-        {
-#if !DEBUG_LOOPBACK
-            if (buddyIp == myIP)
-                return true; // just ignore this situation
-#endif
-            string fullMsg = CMessageHandler.GenerateMessage(myName, myIP, msg);
+        #endregion
 
-            if (client != null)
-            {
-                // this is a new connection!
-                if (!ipBuddyMessages.ContainsKey(buddyIp))
-                    ipBuddyMessages.Add(buddyIp, new Queue<string>());
-                ipBuddyMessages[buddyIp].Enqueue(fullMsg);
+        #region Client Connect Asynchronous Callback
 
-                if (!String.IsNullOrEmpty(buddyFullName))
-                    ipBuddyFullNameLookup[buddyIp] = buddyFullName;
-
-                debug("Client starting for " + buddyIp);
-                Task.Factory.StartNew(() => StartClientSide(client, buddyIp));
-            }
-            else
-            {
-                if (ipsInUse.Contains(buddyIp))
-                {
-                    lock (ipBuddyMessages[buddyIp])
-                    {
-                        ipBuddyMessages[buddyIp].Enqueue(fullMsg);
-                    }
-                }
-                else
-                {
-//#if !DEBUG_LOOPBACK
-                    //Task.Factory.StartNew(() => StartClientSide(buddyIp));
-//#endif
-                    return false; // signal that this message did not go thru
-                }
-            }
-            return true;
-        }
-
-        static public string GetIPAddress(string startWith)
-        {
-            IPHostEntry host;
-            string localIP = "?";
-            host = Dns.GetHostEntry(Dns.GetHostName());
-            foreach (IPAddress ip in host.AddressList)
-            {
-                if (ip.AddressFamily == AddressFamily.InterNetwork)
-                {
-                    if (ip.ToString().StartsWith(startWith))
-                        localIP = ip.ToString();
-                }
-            }
-            return localIP;
-        }
-
-        static private Chatter _debug = null;
-        static public void debug(string msg)
-        {
-#if (DEBUG)
-            if (_debug != null)
-                _debug.InjectTestMessage("{ " + msg + " }");
-#endif
-        }
-
-        // ManualResetEvent instance signal completion.
         static private void connectCallback(IAsyncResult ar)
         {
             try
@@ -608,6 +685,10 @@ namespace chatter
                 //debug(e.ToString());
             }
         }
+
+        #endregion
+
+        #region Searching Thread
 
         static public void StartSearching(Chatter me)
         {
@@ -749,9 +830,36 @@ namespace chatter
                 return;
             });
         }
+
+        #endregion
+
+        #region Checksum Msg Helper
+
+        static public string Checksum(string msg)
+        {
+            MD5 md5 = System.Security.Cryptography.MD5.Create();
+            byte[] inputBytes = System.Text.Encoding.ASCII.GetBytes(msg);
+            byte[] hash = md5.ComputeHash(inputBytes);
+            return hash[0].ToString("X2") + hash[1].ToString("X2") + hash[2].ToString("X2") + hash[3].ToString("X2");
+        }
+
+        #endregion
+
+        #region Debug Helper
+
+        static private Chatter _debug = null;
+        static public void debug(string msg)
+        {
+#if (DEBUG)
+            if (_debug != null)
+                _debug.InjectTestMessage("{ " + msg + " }");
+#endif
+        }
+
+        #endregion
     }
 
-    // State object for receiving data from remote device.  
+    #region State object for receiving data from remote device.
     public class StateObject
     {
         public StateObject(CMessageHandler mh)
@@ -760,10 +868,11 @@ namespace chatter
         // Client socket.  
         public Socket workSocket = null;
         // Size of receive buffer.  
-        public const int BufferSize = 1024*1000;
+        public const int BufferSize = 1024*50;
         // Receive buffer.  
         public byte[] buffer = new byte[BufferSize];
         // Received data string.  
         public StringBuilder sb = new StringBuilder();
     }
+    #endregion
 }

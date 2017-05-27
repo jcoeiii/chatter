@@ -9,33 +9,35 @@ namespace chatter
 {
     public class CMessageHandler
     {
-        public enum MsgState { Idle, ReadyForRemote, WaitingResponse, AppendAck };
+        public enum MsgState { Idle, ReadyForRemote, WaitingResponse, ReadyForAck, SendAck, Done };
 
         private MsgState _state = MsgState.Idle;
-        private bool _waitingForResponse = false;
         private string _msg2Go = "";
         private int _attempt = 0;
         private Queue<string> _msgs2Send = new Queue<string>();
         private StringBuilder _buildMsg = new StringBuilder();
         private string _lastAckMsg = "";
         private string _lastAckIP = "";
-        private bool _ackWasSent = false;
-        private string currentId = "";
+        private bool _imSendingAck = false;
         private DateTime _startTime;
         private string _name;
-        private bool _completed = false;
         private string _buddyIp = "";
+        private bool _msgProcessed = false;
+        private string myip;
 
-        public CMessageHandler(string name, string buddy)
+        public string Name { get { return this._name; } }
+
+        public CMessageHandler(string name, string buddy, string myIP)
         {
             _name = name;
             _buddyIp = buddy;
+            myip = myIP;
         }
 
         public ManualResetEvent SendDone = new ManualResetEvent(false);
         public ManualResetEvent ReceiveDone = new ManualResetEvent(false);
 
-        public MessageEventArgs PumpMessageFromRemote(string data, out string buddyIp, out bool isTyping)
+        public void PumpMessageFromRemote(string data, out string buddyIp, out bool isTyping)
         {
             // typing detection helpers
             buddyIp = _buddyIp;
@@ -44,139 +46,152 @@ namespace chatter
             else
                 isTyping = false;
 
-            if (!String.IsNullOrEmpty(data))
+            if (!String.IsNullOrWhiteSpace(data))
             {
-                // build local message up
+                // build message up
                 lock (_buildMsg)
                 {
                     _buildMsg.Append(data);
                 }
-                lock (_buildMsg)
-                {
-                    string localMsg = _buildMsg.ToString();
-                    int myIndex = localMsg.IndexOf("<EOF>");
-                    if (myIndex > -1)
-                    {
-                        localMsg = localMsg.Substring(0, myIndex + 1 + 4).Trim();
-                        _buildMsg.Remove(0, myIndex + 1 + 4);
-
-                        MessageEventArgs mea = new MessageEventArgs(localMsg);
-                        if (mea.Valid)
-                        {
-                            // for safety
-                            _buddyIp = mea.FriendIP;
-
-                            // this was a reply ACK?
-                            if (currentId == mea.Id)
-                            {
-                                Sock.debug(_name + ":got ACK:" + this._state.ToString() + ":Id=" + mea.Id);
-                                this._completed = true;
-                                if (this._waitingForResponse)
-                                {
-                                    this._waitingForResponse = false;
-                                    this._state = MsgState.Idle;
-                                }
-                                return null; // don't send a repeat back to the user screen
-                            }
-                            else
-                            {
-                                _lastAckMsg = generate(mea.Id, mea.FriendName, mea.FriendIP, ""); // no need to send entire msg payload
-                                _lastAckIP = mea.FriendIP;
-
-                                if (!this._waitingForResponse)
-                                {
-                                    Sock.debug(_name + ":AppendAck:Current=" + currentId + ":Id=" + mea.Id);
-                                    this._state = MsgState.AppendAck;
-                                }
-                                else
-                                {
-                                    Sock.debug(_name + ":Msg:" + this._state.ToString() + "Current=" + currentId + ":Id=" + mea.Id);
-                                }
-                            }
-                            return mea;
-                        }
-                        else
-                            Sock.debug(_name + ": oops, invalid message received");
-                    }
-                    else if (_buildMsg.Length > 5000 && localMsg == "")
-                        _buildMsg.Clear();
-                }
             }
-            return null;
         }
 
-        public MsgState ProcessStates()
+        public MsgState ProcessStates(out MessageEventArgs mea)
         {
+            mea = processMea();
+
             switch (this._state)
             {
                 case MsgState.Idle:
                     if (this._msgs2Send.Count > 0)
                     {
-                        this._msg2Go = this._msgs2Send.Dequeue();
+                        lock (this._msgs2Send)
+                        {
+                            this._msg2Go = this._msgs2Send.Dequeue();
+                        }
                         if (!String.IsNullOrWhiteSpace(this._msg2Go))
                         {
-                            this._completed = false;
+                            this._msgProcessed = false;
                             this._attempt = 0;
-                            this._ackWasSent = false;
-                            this._waitingForResponse = false;
+                            this._imSendingAck = false;
                             this._state = MsgState.ReadyForRemote;
                         }
                     }
                     break;
 
                 case MsgState.ReadyForRemote:
-                    if (this._attempt >= 3 || this._completed)
-                    {
+                    this._startTime = DateTime.Now;
+
+                    if (this._attempt >= 3)
                         this._state = MsgState.Idle;
-                    }
-                    else if (this._ackWasSent)
-                    {
-                        this._ackWasSent = false;
-                        this._state = MsgState.Idle;
-                    }
-                    else if (!this._waitingForResponse)
-                    {
-                        if (this._msg2Go.Length > 1024)
-                            this._attempt = 255; // abort resend for large msg
-                        this._waitingForResponse = true;
+                    else if (this._msgProcessed)
                         this._state = MsgState.WaitingResponse;
-                    }
-                    this._attempt++;
                     break;
 
                 case MsgState.WaitingResponse:
                     // message was already sent out, check timeout
                     DateTime endTime = DateTime.Now;
-                    if (endTime.Subtract(this._startTime).Milliseconds >= 2000)
+                    if (endTime.Subtract(this._startTime).Milliseconds >= 800)
                     {
                         Sock.debug(_name + ": timeout, repeating");
-                        this._waitingForResponse = false;
+                        this._msgProcessed = false;
+                        this._attempt++;
                         this._state = MsgState.ReadyForRemote;
                     }
                     break;
 
-                case MsgState.AppendAck:
-                    // force one shot ACK
-                    this._attempt = 0;
-                    this._ackWasSent = true;
-                    this.currentId = this._lastAckIP;
+                case MsgState.ReadyForAck:
+                    this._msgProcessed = false;
                     this._msg2Go = this._lastAckMsg;
-                    this._state = MsgState.ReadyForRemote;
+                    this._state = MsgState.SendAck;
+                    break;
+
+                case MsgState.SendAck:
+                    if (this._msgProcessed)
+                    {
+                        this._msgProcessed = false;
+                        this._imSendingAck = false;
+                        this._state = MsgState.Done;
+                    }
+                    break;
+
+                case MsgState.Done:
+                    this._state = MsgState.Idle;
                     break;
 
                 default: break;
             }
-
             return this._state;
+        }
+
+        private MessageEventArgs processMea()
+        {
+            string localMsg;
+            int myIndex;
+            lock (_buildMsg)
+            {
+                localMsg = _buildMsg.ToString();
+                myIndex = localMsg.IndexOf("<EOF>");
+                if (myIndex >= 0)
+                {
+                    localMsg = localMsg.Substring(0, myIndex + 1 + 4).Trim();
+                    _buildMsg.Remove(0, myIndex + 1 + 4);
+                }
+            }
+
+            if (myIndex >= 0)
+            {
+                MessageEventArgs mea = new MessageEventArgs(localMsg);
+
+                if (mea.Valid)
+                {
+                    // for safety
+                    _buddyIp = mea.FriendIP;
+
+                    if (this._state == MsgState.WaitingResponse || this._state == MsgState.SendAck)
+                    {
+
+                        Sock.debug(_name + ":got ACK:" + this._state.ToString() + ":Id=" + mea.Id);
+                        mea.IsAck = true;
+                        if (this._state == MsgState.WaitingResponse)
+                            this._state = MsgState.Done;
+                        return mea;
+                    }
+
+                    if (this._imSendingAck || mea.FriendIP == myip)
+                    {
+                        return null;
+                    }
+                    else if (this._state == MsgState.Idle || this._state == MsgState.ReadyForRemote)
+                    {
+                        this._imSendingAck = true;
+                        _lastAckMsg = generate(mea.Id, mea.FriendName, mea.FriendIP, Sock.Checksum(mea.TextFromFriend)); // no need to send entire msg payload
+                        _lastAckIP = mea.FriendIP;
+
+                        Sock.debug(_name + ":Display(sendAck)" + this._state.ToString() + ":Id=" + mea.Id);
+                        this._state = MsgState.ReadyForAck;
+                    }
+                    else
+                        return null;
+                }
+                else
+                {
+                    Sock.debug(_name + ": oops, invalid message received");
+                }
+
+                return mea;
+            }
+            else
+            {
+                return null;
+            }
         }
 
         public string MessageReady
         {
             get
             {
-                MessageEventArgs mea = new MessageEventArgs(this._msg2Go);
-                currentId = mea.Id;
-                this._startTime = DateTime.Now; // stamp it right now, going to send out over socket
+                this._msgProcessed = true;
                 return this._msg2Go;
             }
         }
@@ -190,7 +205,10 @@ namespace chatter
 
         public void AddMessageToSend(string msg)
         {
-            this._msgs2Send.Enqueue(msg);
+            lock (this._msgs2Send)
+            {
+                this._msgs2Send.Enqueue(msg);
+            }
         }
 
 

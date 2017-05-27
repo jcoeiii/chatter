@@ -16,7 +16,9 @@ namespace chatter
 
         private bool isFile = false;
         private string fileName;
-        private byte[] fileData;
+        private string fileData;
+        private int chunkId = 0;
+        private string checksum;
 
         public MessageEventArgs(string data)
         {
@@ -40,15 +42,27 @@ namespace chatter
                                 friendIP = data.Substring(loc2 + 1, loc3 - loc2 - 1);
                                 textFromFriend = data.Substring(loc3 + 1, data.Length - loc3 - 1);
 
+                                checksum = Sock.Checksum(textFromFriend.Replace("<EOF>", ""));
+                                
                                 if (textFromFriend.EndsWith("<EOF>"))
                                 {
                                     if (textFromFriend.StartsWith("<OBJECT>FILE"))
                                     {
-                                        string[] splitObj = textFromFriend.Split('\t');
-                                        this.fileName = splitObj[1];
-                                        this.fileData = StringCompressor.ToHexBytes(splitObj[2].Substring(0, splitObj[2].Length - 4 - 1));
-
                                         isFile = true;
+                                        try
+                                        {
+                                            string[] splitObj = textFromFriend.Split('*');
+                                            this.chunkId = Convert.ToInt32(splitObj[1]);
+                                            this.fileName = splitObj[2];
+                                            this.fileData = (splitObj[3].Substring(0, splitObj[3].Length - 4 - 1));
+                                            valid = true;
+                                        }
+                                        catch
+                                        {
+                                            valid = false;
+                                        }
+                                        textFromFriend = textFromFriend.Replace("<EOF>", "");
+                                        return;
                                     }
 
                                     textFromFriend = textFromFriend.Replace("<EOF>", "");
@@ -66,7 +80,8 @@ namespace chatter
         }
 
         public bool Valid { get { return this.valid; } }
-
+        public int ChunkId {  get { return this.chunkId;  } }
+        public bool IsAck { get; set; }
         public string Id { get { return this.id; } }
         public string FriendName { get { return this.friendName; } }
         public string FriendIP { get { return this.friendIP; } }
@@ -74,7 +89,8 @@ namespace chatter
 
         public bool IsFile {  get { return this.isFile; } }
         public string FileName {  get { return this.fileName;  } }
-        public byte[] FileData { get { return this.fileData; } }
+        public string FileData { get { return this.fileData; } }
+        public string Checksum { get { return this.checksum; } }
     }
 
 }
