@@ -61,7 +61,7 @@ namespace chatter
             this.richTextBoxChatIn.SelectionStart = 0;
             this.richTextBoxChatIn.Focus();
 
-            this._lastTyped.Interval = 4000; // 4 seconds
+            this._lastTyped.Interval = 2000; // 2 seconds
             this._lastTyped.Tick += _lastTyped_Tick;
             this._lastTyped.Start();
         }
@@ -455,14 +455,15 @@ namespace chatter
 
                 if (buddyList.ContainsKey(this.comboBoxUsers.Text))
                 {
+                    string file = files[0];
                     appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
-                    appendText(richTextBoxChatOut, "Sending File: " + files[0] + Environment.NewLine, Color.LightSalmon);
+                    appendText(richTextBoxChatOut, "Sending File: " + file + Environment.NewLine, Color.LightSalmon);
                     richTextBoxChatOut.ScrollToCaret();
 
                     string ip = buddyList[this.comboBoxUsers.Text];
                     string fullname = this.comboBoxUsers.Text;
 
-                    Task.Factory.StartNew(() => dotheFileXfer(files[0], ip, fullname));
+                    Task.Factory.StartNew(() => dotheFileXfer(file, ip, fullname));
                 }
             }
         }
@@ -519,7 +520,7 @@ namespace chatter
         private bool handleFileIO(byte[] buffer, int length, string filepath, int chunk, string ip, string fullname)
         {
             string fileData = StringCompressor.ToHexString(buffer, length);
-            string m = "<OBJECT>" + "FILE*" + chunk.ToString() + "*" + Path.GetFileName(filepath) + "*" + fileData;
+            string m = "<OBJECT>" + "FILE*" + chunk.ToString() + "*" + Path.GetFileName(filepath).Replace("?", "_") + "*" + fileData;
             string chk = Sock.Checksum(Sock.Checksum(m)); // do it twice, trust me
 
             _e = null;

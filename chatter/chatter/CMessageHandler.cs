@@ -91,7 +91,7 @@ namespace chatter
                 case MsgState.WaitingResponse:
                     // message was already sent out, check timeout
                     DateTime endTime = DateTime.Now;
-                    if (endTime.Subtract(this._startTime).Milliseconds >= 800)
+                    if (endTime.Subtract(this._startTime).Milliseconds >= 990)
                     {
                         Sock.debug(_name + ": timeout, repeating");
                         this._msgProcessed = false;

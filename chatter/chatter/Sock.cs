@@ -30,8 +30,8 @@ namespace chatter
         static private string myPCName;
         static private Dictionary<string, Queue<string>> ipBuddyMessages = new Dictionary<string, Queue<string>>();
         static private Dictionary<string, string> ipBuddyFullNameLookup = new Dictionary<string, string>();
-        static private Dictionary<string, bool> ipBuddyIsTyping = new Dictionary<string, bool>();
-        static private bool myTypingStatus = false;
+        static private Dictionary<string, int> ipBuddyIsTyping = new Dictionary<string, int>();
+        static private int myTypingStatus = 0;
         static private List<string> ipsInUse = new List<string>();
 
         #region Public Events
@@ -86,7 +86,16 @@ namespace chatter
 
         static public void MyTypingStatus(bool status)
         {
-            myTypingStatus = status;
+            if (status)
+            {
+                myTypingStatus++;
+                if (myTypingStatus > 10)
+                    myTypingStatus = 10;
+            }
+            else
+            {
+                myTypingStatus /= 2;
+            }
         }
 
         static public string TypingBuddyList
@@ -98,7 +107,7 @@ namespace chatter
                 {
                     foreach (string ip in ipsInUse)
                     {
-                        if (ipBuddyFullNameLookup.ContainsKey(ip) && ipBuddyIsTyping[ip])
+                        if (ipBuddyFullNameLookup.ContainsKey(ip) && ipBuddyIsTyping[ip] != 0)
                             typers += ipBuddyFullNameLookup[ip] + " ";
                     }
                 }
@@ -256,6 +265,7 @@ namespace chatter
 
             Thread.Sleep(50);
             debug("Server thread launched");
+            int errors = 0;
             try
             {
                 CMessageHandler m = new CMessageHandler("ServerMH", buddyIp, myIP);
@@ -264,7 +274,7 @@ namespace chatter
                     ipBuddyMessages.Add(buddyIp, new Queue<string>());
 
                 if (!ipBuddyIsTyping.ContainsKey(buddyIp))
-                    ipBuddyIsTyping.Add(buddyIp, false);
+                    ipBuddyIsTyping.Add(buddyIp, 0);
 
                 ipBuddyMessages[buddyIp].Enqueue(CMessageHandler.GenerateMessage(myPCName, myIP, "Connected!"));
 
@@ -301,7 +311,7 @@ namespace chatter
                     }
                     else
                     {
-                        if (myTypingStatus)
+                        if (myTypingStatus > 0)
                             send(handler, "\t", m);
                         else
                             send(handler, " ", m);
@@ -311,12 +321,17 @@ namespace chatter
 
                     if (!receive(handler, m))
                     {
-                        debug("Server error for " + buddyIp);
-                        break;
+                        if (errors++ >= 3)
+                        {
+                            debug("Server error " + buddyIp);
+                            break;
+                        }
                     }
                     else
+                    {
+                        errors = 0;
                         m.ReceiveDone.WaitOne(500);
-
+                    }
                     Thread.Sleep(50);
                     CSavedIPs.AppendIP(buddyIp);
                 }
@@ -420,6 +435,7 @@ namespace chatter
             beginThread();
 
             debug("Client thread launched");
+            int errors = 0;
 
             try
             {
@@ -437,7 +453,7 @@ namespace chatter
                     ipBuddyMessages.Add(buddyIp, new Queue<string>());
 
                 if (!ipBuddyIsTyping.ContainsKey(buddyIp))
-                    ipBuddyIsTyping.Add(buddyIp, false);
+                    ipBuddyIsTyping.Add(buddyIp, 0);
 
                 ipBuddyMessages[buddyIp].Enqueue(CMessageHandler.GenerateMessage(myPCName, myIP, "Connected!"));
 
@@ -474,7 +490,7 @@ namespace chatter
                     }
                     else
                     {
-                        if (myTypingStatus)
+                        if (myTypingStatus > 0)
                             send(sender, "\t", m);
                         else
                             send(sender, " ", m);
@@ -483,12 +499,17 @@ namespace chatter
 
                     if (!receive(sender, m))
                     {
-                        debug("Client error " + buddyIp);
-                        break;
+                        if (errors++ >= 3)
+                        {
+                            debug("Client error " + buddyIp);
+                            break;
+                        }
                     }
                     else
+                    {
+                        errors = 0;
                         m.ReceiveDone.WaitOne(500);
-
+                    }
                     Thread.Sleep(50);
                     CSavedIPs.AppendIP(buddyIp);
                 }
@@ -529,7 +550,7 @@ namespace chatter
 #endif
             string fullMsg = CMessageHandler.GenerateMessage(myName, myIP, msg);
 
-            if (client != null)
+            if (client != null || forceReconnect)
             {
 #if DEBUG_LOOPBACK
                 if (ipBuddyMessages.Count > 0 && ipsInUse.Contains(buddyIp))
@@ -610,8 +631,22 @@ namespace chatter
                     string buddyIp;
                     bool isBuddyTyping;
                     state.m.PumpMessageFromRemote(Encoding.ASCII.GetString(state.buffer, 0, bytesRead), out buddyIp, out isBuddyTyping);
+
                     if (!String.IsNullOrWhiteSpace(buddyIp) && ipBuddyIsTyping.ContainsKey(buddyIp))
-                        ipBuddyIsTyping[buddyIp] = isBuddyTyping;
+                    {
+                        if (isBuddyTyping)
+                        {
+                            ipBuddyIsTyping[buddyIp]++;
+                            if (ipBuddyIsTyping[buddyIp] > 10)
+                                ipBuddyIsTyping[buddyIp] = 10;
+                        }
+                        else
+                        {
+                            // wait a little before turning off
+                            if (ipBuddyIsTyping[buddyIp] > 0)
+                                ipBuddyIsTyping[buddyIp]--;
+                        }
+                    }
 
                     // Get the rest of the data.  
                     client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
