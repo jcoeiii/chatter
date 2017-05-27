@@ -477,7 +477,7 @@ namespace chatter
             {
                 using (Stream source = File.OpenRead(filepath))
                 {
-                    byte[] buffer = new byte[1024 * 4];
+                    byte[] buffer = new byte[1024 * 7];
                     int bytesRead;
                     int chunkCount = 0;
 
@@ -489,7 +489,7 @@ namespace chatter
                         if (!handleFileIO(buffer, bytesRead, filepath, chunkCount++, ip, fullname))
                             throw new Exception("file transfer errors on chunk: " + chunkCount);
 
-                        if (chunkCount % 3 == 0)
+                        if (chunkCount % 12 == 0)
                             InjectTestMessage("Working...");
                     }
 
