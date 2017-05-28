@@ -408,6 +408,7 @@ namespace chatter
             updateToolStrip();
             _lastTyped.Stop(); // resets timer
             _lastTyped.Start();
+            GC.Collect(); // just helps ok
         }
 
         private void _lastTyped_Tick(object sender, EventArgs e)

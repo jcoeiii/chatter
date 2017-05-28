@@ -666,6 +666,7 @@ namespace chatter
             catch (Exception e)
             {
                 debug(e.ToString());
+                bufferRx = new byte[BufferSize]; // just in case memory or buffer usage was the issue
             }
         }
 
@@ -896,10 +897,10 @@ namespace chatter
         static private Chatter _debug = null;
         static public void debug(string msg)
         {
-//#if (DEBUG)
+#if (DEBUG)
             if (_debug != null)
                 _debug.InjectTestMessage("{ " + msg + " }");
-//#endif
+#endif
         }
 
         #endregion
