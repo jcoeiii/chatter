@@ -304,10 +304,7 @@ namespace chatter
                     {
                         debug("Server sent out msg to " + buddyIp);
 
-                        string message = m.MessageReady;
-
-                        send(handler, message, m);
-                        m.SendDone.WaitOne();
+                        send(handler, m.MessageReady, m);
                     }
                     else
                     {
@@ -315,10 +312,8 @@ namespace chatter
                             send(handler, "\t", m);
                         else
                             send(handler, " ", m);
-                        m.SendDone.WaitOne();
-                        Thread.Sleep(150);
+                        Thread.Sleep(150); // slow down pinging
                     }
-
 
                     if (!receive(handler, m))
                     {
@@ -329,11 +324,8 @@ namespace chatter
                         }
                     }
                     else
-                    {
                         errors = 0;
-                        m.ReceiveDone.WaitOne(1000);
-                    }
-                    
+                  
                     CSavedIPs.AppendIP(buddyIp);
                 }
             }
@@ -483,11 +475,7 @@ namespace chatter
                     if (state == CMessageHandler.MsgState.ReadyForRemote || state == CMessageHandler.MsgState.SendAck)
                     {
                         debug("Client sent out msg to " + buddyIp);
-
-                        string message = m.MessageReady;
-
-                        send(sender, message, m);
-                        m.SendDone.WaitOne();
+                        send(sender, m.MessageReady, m);
                     }
                     else
                     {
@@ -495,8 +483,7 @@ namespace chatter
                             send(sender, "\t", m);
                         else
                             send(sender, " ", m);
-                        m.SendDone.WaitOne();
-                        Thread.Sleep(150);
+                        Thread.Sleep(150); // slow down pinging
                     }
 
                     if (!receive(sender, m))
@@ -508,10 +495,7 @@ namespace chatter
                         }
                     }
                     else
-                    {
                         errors = 0;
-                        m.ReceiveDone.WaitOne(1000);
-                    }
                     
                     CSavedIPs.AppendIP(buddyIp);
                 }
@@ -594,79 +578,98 @@ namespace chatter
 
         #endregion
 
+        #region Receive Asynchronous Callback
+
         // Size of receive buffer.  
         static private int BufferSize { get { return 1024 * 100; } }
         // Receive buffer.  
-        static private byte[] bufferRx = new byte[BufferSize];
-
-        #region Receive Asynchronous Callback
+        static private byte[] bufferRx = null;
 
         static private bool receive(Socket client, CMessageHandler m)
         {
+            // Create the state object.
+            StateObject state = new StateObject(m, client);
+            bool ok = false;
             try
             {
-                // Create the state object.
-                StateObject state = new StateObject(m);
-                state.workSocket = client;
+                state.bytesRead = 0;
+                if (bufferRx == null)
+                    bufferRx = new byte[BufferSize];
 
                 // Begin receiving the data from the remote device.
                 client.BeginReceive(bufferRx, 0, BufferSize, 0, new AsyncCallback(receiveCallback), state);
-                return true;
+                
+                m.ReceiveDone.WaitOne();
+
+                ok = !state.Error;
             }
             catch (Exception e)
             {
                 debug(m.Name + " " + e.ToString());
-                return false;
             }
+            //state.Dispose();
+
+            return ok;
         }
 
         private static void receiveCallback(IAsyncResult ar)
         {
+            StateObject state = (StateObject)ar.AsyncState;
+            Socket client = state.workSocket;
             try
             {
-                // Retrieve the state object and the client socket   
-                // from the asynchronous state object.  
-                StateObject state = (StateObject)ar.AsyncState;
-                Socket client = state.workSocket;
-
-                // Read data from the remote device.  
-                int bytesRead = client.EndReceive(ar);
-
-                if (bytesRead > 0)
+                do
                 {
-                    // pump message and detect user typing
-                    string buddyIp;
-                    bool isBuddyTyping;
-                    string msg = Encoding.ASCII.GetString(bufferRx, 0, bytesRead);
-                    state.m.PumpMessageFromRemote(msg, out buddyIp, out isBuddyTyping);
+                    // Read data from the remote device.  
+                    state.bytesRead = client.EndReceive(ar);
 
-                    if (!String.IsNullOrWhiteSpace(buddyIp) && ipBuddyIsTyping.ContainsKey(buddyIp))
+                    if (state.bytesRead > 0)
                     {
-                        if (isBuddyTyping)
+                        // pump message and detect user typing
+                        string buddyIp;
+                        bool isBuddyTyping;
+                        string msg = Encoding.ASCII.GetString(bufferRx, 0, state.bytesRead);
+                        state.m.PumpMessageFromRemote(msg, out buddyIp, out isBuddyTyping);
+
+                        if (!String.IsNullOrWhiteSpace(buddyIp) && ipBuddyIsTyping.ContainsKey(buddyIp))
                         {
-                            ipBuddyIsTyping[buddyIp]++;
-                            if (ipBuddyIsTyping[buddyIp] > 10)
-                                ipBuddyIsTyping[buddyIp] = 10;
+                            if (isBuddyTyping)
+                            {
+                                ipBuddyIsTyping[buddyIp]++;
+                                if (ipBuddyIsTyping[buddyIp] > 10)
+                                    ipBuddyIsTyping[buddyIp] = 10;
+                            }
+                            else
+                            {
+                                // wait a little before turning off
+                                if (ipBuddyIsTyping[buddyIp] > 0)
+                                    ipBuddyIsTyping[buddyIp]--;
+                            }
+                        }
+
+                        if (client.Available > 0)
+                        {
+                            bufferRx = new byte[BufferSize];
+                            client.BeginReceive(bufferRx, 0, BufferSize, 0, new AsyncCallback(receiveCallback), state);
                         }
                         else
-                        {
-                            // wait a little before turning off
-                            if (ipBuddyIsTyping[buddyIp] > 0)
-                                ipBuddyIsTyping[buddyIp]--;
-                        }
+                            break;
                     }
-
-                    // Get the rest of the data.  
-                    client.BeginReceive(bufferRx, 0, BufferSize, 0, new AsyncCallback(receiveCallback), state);
-                }
-                else
-                    // Signal that all bytes have been received.  
-                    state.m.ReceiveDone.Set();
+                } while (state.bytesRead > 0);
             }
             catch (Exception e)
             {
-                debug(e.ToString());
-                bufferRx = new byte[BufferSize]; // just in case memory or buffer usage was the issue
+                debug("AR error " + e.ToString());
+                state.bytesRead = 0;
+                state.Error = true;
+            }
+
+            // Signal that all bytes have been received.
+            if (!state.disposed)
+            {
+                state.m.ReceiveDone.Set();
+                if (state.bytesRead == 0)
+                    state.Dispose();
             }
         }
 
@@ -677,35 +680,39 @@ namespace chatter
         static private void send(Socket client, String data, CMessageHandler m)
         {
             // Create the state object.
-            StateObject state = new StateObject(m);
-            state.workSocket = client;
+            StateObject state = new StateObject(m, client);
 
             // Convert the string data to byte data using ASCII encoding.  
             byte[] byteData = Encoding.ASCII.GetBytes(data);
 
             // Begin sending the data to the remote device.  
             client.BeginSend(byteData, 0, byteData.Length, 0, new AsyncCallback(sendCallback), state);
+            
+            m.SendDone.WaitOne();
+            m.SendDone.Reset();
+            state.Dispose();
         }
 
         private static void sendCallback(IAsyncResult ar)
         {
+            StateObject state = (StateObject)ar.AsyncState;
+
             try
             {
-                StateObject state = (StateObject)ar.AsyncState;
-
                 // Retrieve the socket from the state object.  
                 Socket client = state.workSocket;
 
                 // Complete sending the data to the remote device.  
                 client.EndSend(ar);
-
-                // Signal that all bytes have been sent.  
-                state.m.SendDone.Set();
             }
             catch (Exception e)
             {
+                state.Error = true;
                 debug(e.ToString());
             }
+
+            // Signal that all bytes have been sent.  
+            state.m.SendDone.Set();
         }
 
         #endregion
@@ -907,19 +914,21 @@ namespace chatter
     }
 
     #region State object for receiving data from remote device.
-    public class StateObject
+    public class StateObject : IDisposable
     {
-        public StateObject(CMessageHandler mh)
-        { m = mh; }
-        public CMessageHandler m = null;
-        // Client socket.  
-        public Socket workSocket = null;
-        // Size of receive buffer.  
-        //public const int BufferSize = 1024*50;
-        // Receive buffer.  
-        //public byte[] buffer = new byte[BufferSize];
-        // Received data string.  
-        //public StringBuilder sb = new StringBuilder();
+        public StateObject(CMessageHandler mh, Socket socket)
+        { m = mh; workSocket = socket; }
+        public CMessageHandler m;  
+        public Socket workSocket;
+        public bool Error = false;
+        public int bytesRead = 0;
+        public bool disposed = false;
+        public void Dispose()
+        {
+            m = null;
+            workSocket = null;
+            disposed = true;
+        }
     }
     #endregion
 }

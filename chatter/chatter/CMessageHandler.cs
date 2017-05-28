@@ -91,7 +91,7 @@ namespace chatter
                 case MsgState.WaitingResponse:
                     // message was already sent out, check timeout
                     DateTime endTime = DateTime.Now;
-                    if (endTime.Subtract(this._startTime).Milliseconds >= 990)
+                    if (endTime.Subtract(this._startTime).Milliseconds >= 599)
                     {
                         Sock.debug(_name + ": timeout, repeating");
                         this._msgProcessed = false;
@@ -160,6 +160,8 @@ namespace chatter
 
                     if (this._imSendingAck || mea.FriendIP == myip)
                     {
+                        if (this._state == MsgState.WaitingResponse)
+                            this._state = MsgState.Done;
                         return null;
                     }
                     else if (this._state == MsgState.Idle || this._state == MsgState.ReadyForRemote)
@@ -172,7 +174,7 @@ namespace chatter
                         this._state = MsgState.ReadyForAck;
                     }
                     else
-                        return null;
+                        return mea;
                 }
                 else
                 {
