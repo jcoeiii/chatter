@@ -51,7 +51,7 @@ namespace chatter
                 // build message up
                 lock (_buildMsg)
                 {
-                    _buildMsg.Append(data);
+                    _buildMsg.Append(data.TrimStart());
                 }
             }
         }

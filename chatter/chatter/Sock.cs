@@ -307,7 +307,7 @@ namespace chatter
                         string message = m.MessageReady;
 
                         send(handler, message, m);
-                        m.SendDone.WaitOne(500);
+                        m.SendDone.WaitOne();
                     }
                     else
                     {
@@ -315,7 +315,8 @@ namespace chatter
                             send(handler, "\t", m);
                         else
                             send(handler, " ", m);
-                        m.SendDone.WaitOne(500);
+                        m.SendDone.WaitOne();
+                        Thread.Sleep(150);
                     }
 
 
@@ -330,9 +331,9 @@ namespace chatter
                     else
                     {
                         errors = 0;
-                        m.ReceiveDone.WaitOne(500);
+                        m.ReceiveDone.WaitOne(1000);
                     }
-                    Thread.Sleep(50);
+                    
                     CSavedIPs.AppendIP(buddyIp);
                 }
             }
@@ -486,7 +487,7 @@ namespace chatter
                         string message = m.MessageReady;
 
                         send(sender, message, m);
-                        m.SendDone.WaitOne(500);
+                        m.SendDone.WaitOne();
                     }
                     else
                     {
@@ -494,7 +495,8 @@ namespace chatter
                             send(sender, "\t", m);
                         else
                             send(sender, " ", m);
-                        m.SendDone.WaitOne(500);
+                        m.SendDone.WaitOne();
+                        Thread.Sleep(150);
                     }
 
                     if (!receive(sender, m))
@@ -508,9 +510,9 @@ namespace chatter
                     else
                     {
                         errors = 0;
-                        m.ReceiveDone.WaitOne(500);
+                        m.ReceiveDone.WaitOne(1000);
                     }
-                    Thread.Sleep(50);
+                    
                     CSavedIPs.AppendIP(buddyIp);
                 }
 
@@ -592,6 +594,11 @@ namespace chatter
 
         #endregion
 
+        // Size of receive buffer.  
+        static private int BufferSize { get { return 1024 * 100; } }
+        // Receive buffer.  
+        static private byte[] bufferRx = new byte[BufferSize];
+
         #region Receive Asynchronous Callback
 
         static private bool receive(Socket client, CMessageHandler m)
@@ -603,7 +610,7 @@ namespace chatter
                 state.workSocket = client;
 
                 // Begin receiving the data from the remote device.
-                client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
+                client.BeginReceive(bufferRx, 0, BufferSize, 0, new AsyncCallback(receiveCallback), state);
                 return true;
             }
             catch (Exception e)
@@ -630,7 +637,8 @@ namespace chatter
                     // pump message and detect user typing
                     string buddyIp;
                     bool isBuddyTyping;
-                    state.m.PumpMessageFromRemote(Encoding.ASCII.GetString(state.buffer, 0, bytesRead), out buddyIp, out isBuddyTyping);
+                    string msg = Encoding.ASCII.GetString(bufferRx, 0, bytesRead);
+                    state.m.PumpMessageFromRemote(msg, out buddyIp, out isBuddyTyping);
 
                     if (!String.IsNullOrWhiteSpace(buddyIp) && ipBuddyIsTyping.ContainsKey(buddyIp))
                     {
@@ -649,8 +657,11 @@ namespace chatter
                     }
 
                     // Get the rest of the data.  
-                    client.BeginReceive(state.buffer, 0, StateObject.BufferSize, 0, new AsyncCallback(receiveCallback), state);
+                    client.BeginReceive(bufferRx, 0, BufferSize, 0, new AsyncCallback(receiveCallback), state);
                 }
+                else
+                    // Signal that all bytes have been received.  
+                    state.m.ReceiveDone.Set();
             }
             catch (Exception e)
             {
@@ -885,10 +896,10 @@ namespace chatter
         static private Chatter _debug = null;
         static public void debug(string msg)
         {
-#if (DEBUG)
+//#if (DEBUG)
             if (_debug != null)
                 _debug.InjectTestMessage("{ " + msg + " }");
-#endif
+//#endif
         }
 
         #endregion
@@ -903,11 +914,11 @@ namespace chatter
         // Client socket.  
         public Socket workSocket = null;
         // Size of receive buffer.  
-        public const int BufferSize = 1024*50;
+        //public const int BufferSize = 1024*50;
         // Receive buffer.  
-        public byte[] buffer = new byte[BufferSize];
+        //public byte[] buffer = new byte[BufferSize];
         // Received data string.  
-        public StringBuilder sb = new StringBuilder();
+        //public StringBuilder sb = new StringBuilder();
     }
     #endregion
 }
