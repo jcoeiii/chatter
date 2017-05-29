@@ -901,13 +901,14 @@ namespace chatter
 
         #region Debug Helper
 
+        static public bool InDebug { get; set; }
         static private Chatter _debug = null;
         static public void debug(string msg)
         {
-#if (DEBUG)
-            if (_debug != null)
-                _debug.InjectTestMessage("{ " + msg + " }");
+#if (!DEBUG)
+            if (InDebug && _debug != null)
 #endif
+                _debug.InjectTestMessage("{ " + msg + " }");
         }
 
         #endregion

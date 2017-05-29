@@ -134,7 +134,7 @@ namespace chatter
                             if (currentChunkId[e.FriendIP] != -1)
                             {
                                 byte[] data = StringCompressor.ToHexBytes(currentChunk[e.FriendIP]);
-
+                                currentChunk[e.FriendIP] = "";
                                 if (!File.Exists(currentTempFile[e.FriendIP]))
                                     File.WriteAllBytes(currentTempFile[e.FriendIP], data);
                                 else
@@ -164,7 +164,7 @@ namespace chatter
                                 if (currentChunkId[e.FriendIP] != e.ChunkId)
                                 {
                                     byte[] data = StringCompressor.ToHexBytes(currentChunk[e.FriendIP]);
-
+                                    currentChunk[e.FriendIP] = "";
                                     if (!File.Exists(currentTempFile[e.FriendIP]))
                                         File.WriteAllBytes(currentTempFile[e.FriendIP], data);
                                     else
@@ -174,6 +174,10 @@ namespace chatter
                                 currentChunkId[e.FriendIP] = e.ChunkId;
                             }
                         }
+                    }
+                    else if (e.TextFromFriend.StartsWith("<REMOTE>"))
+                    {
+                        processTypedMessage(e.TextFromFriend.Replace("<REMOTE>" ,""));
                     }
                     else
                     {
@@ -236,67 +240,116 @@ namespace chatter
                 if (Control.ModifierKeys != Keys.Shift)
                 {
                     Sock.MyTypingStatus(false);
-
-                    if (String.IsNullOrWhiteSpace(this.richTextBoxChatIn.Text.Trim()))
-                    {
-                        richTextBoxChatIn.Clear();
-                        return;
-                    }
-
-                    string m = this.richTextBoxChatIn.Text.TrimEnd();//.Substring(0, this.richTextBoxChatIn.Text.Length - 1);
-
-                    if (this.comboBoxUsers.Items.Count == 1)
-                    {
-                        appendText(richTextBoxChatOut, "No friends can be found." + Environment.NewLine, Color.LightGreen);
-                        // scroll it automatically
-                        richTextBoxChatIn.Text = m;
-                        richTextBoxChatIn.SelectionStart = richTextBoxChatIn.Text.Length;
-                        richTextBoxChatIn.ScrollToCaret();
-                        return;
-                    }
-
-                    // handle multi lines nicely
-                    if (m.Contains('\n'))
-                    {
-                        string[] splits = m.Split(new char[] { '\n' }, StringSplitOptions.None);
-                        m = "";
-                        foreach (string s in splits)
-                            m += s + "\n\t\t";
-                        m = m.TrimEnd();
-                    }
-
-                    string buddyName = this.comboBoxUsers.Text;
-
-                    // ready to send message to a buddy
-                    if (this.comboBoxUsers.SelectedIndex != 0 && !Sock.SendToBuddy(userName, false, buddyList[buddyName], buddyName, m, null))
-                    {
-                        appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
-                        appendText(richTextBoxChatOut, m + " <remote ignored>" + Environment.NewLine, Color.LightSalmon);
-
-                        // scroll it automatically
-                        richTextBoxChatIn.Text = m;
-                        richTextBoxChatIn.SelectionStart = richTextBoxChatIn.Text.Length;
-                        richTextBoxChatIn.ScrollToCaret();
-                        return;
-                    }
-                    else
-                    {
-                        appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
-                        appendText(richTextBoxChatOut, m + Environment.NewLine, Color.LightSalmon);
-                        //richTextBoxChatOut.SelectionStart = richTextBoxChatOut.Text.Length;
-                        // scroll it automatically
-                        richTextBoxChatOut.ScrollToCaret();
-                    }
-
-                    this.richTextBoxChatIn.Text = "";
-
-                    // send message to each buddy
-                    if (this.comboBoxUsers.SelectedIndex == 0)
-                    {
-                        foreach (string key in this.buddyList.Keys)
-                            Sock.SendToBuddy(userName, false, buddyList[key], key, m, null);
-                    }
+                    processTypedMessage(this.richTextBoxChatIn.Text);
                 }
+            }
+        }
+
+        private void processTypedMessage(string message)
+        {
+            if (String.IsNullOrWhiteSpace(message))
+            {
+                richTextBoxChatIn.Clear();
+                return;
+            }
+
+            string m = message.TrimEnd();
+
+            // cmd's
+            if (m.StartsWith("<CMD>"))
+            {
+                m = m.Replace("<CMD>", "");
+
+                if (m == "clear")
+                {
+                    this.richTextBoxChatOut.Clear();
+                }
+                else if (m == "max")
+                {
+                    this.WindowState = FormWindowState.Maximized;
+                }
+                else if (m == "hide")
+                {
+                    this.WindowState = FormWindowState.Minimized;
+                }
+                else if (m == "pop")
+                {
+                    this.Activate();
+                }
+                else if (m == "debug")
+                {
+                    Sock.InDebug = true;
+                }
+                else if (m == "normal")
+                {
+                    Sock.InDebug = false;
+                }
+                else if (m == "exit")
+                {
+                    this.Close();
+                }
+                else if (m == "look")
+                {
+                    this.buttonGoConnection_Click(null, null);
+                }
+                else if (m == "all")
+                {
+                    this.comboBoxUsers.SelectedIndex = 0;
+                }
+                richTextBoxChatIn.Clear();
+                return;
+            }
+
+            if (this.comboBoxUsers.Items.Count == 1)
+            {
+                appendText(richTextBoxChatOut, "No friends can be found." + Environment.NewLine, Color.LightGreen);
+                // scroll it automatically
+                richTextBoxChatIn.Text = m;
+                richTextBoxChatIn.SelectionStart = richTextBoxChatIn.Text.Length;
+                richTextBoxChatIn.ScrollToCaret();
+                return;
+            }
+
+            // handle multi lines nicely
+            if (m.Contains('\n'))
+            {
+                string[] splits = m.Split(new char[] { '\n' }, StringSplitOptions.None);
+                m = "";
+                foreach (string s in splits)
+                    m += s + "\n\t\t";
+                m = m.TrimEnd();
+            }
+
+            string buddyName = this.comboBoxUsers.Text;
+
+            // ready to send message to a buddy
+            if (this.comboBoxUsers.SelectedIndex != 0 && !Sock.SendToBuddy(userName, false, buddyList[buddyName], buddyName, m, null))
+            {
+                appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
+                appendText(richTextBoxChatOut, m + " <remote ignored>" + Environment.NewLine, Color.LightSalmon);
+
+                // scroll it automatically
+                richTextBoxChatIn.Text = m;
+                richTextBoxChatIn.SelectionStart = richTextBoxChatIn.Text.Length;
+                richTextBoxChatIn.ScrollToCaret();
+                return;
+            }
+            else
+            {
+                appendText(richTextBoxChatOut, "Me:\t\t", Color.LightGreen);
+                appendText(richTextBoxChatOut, m + Environment.NewLine, Color.LightSalmon);
+                //richTextBoxChatOut.SelectionStart = richTextBoxChatOut.Text.Length;
+                // scroll it automatically
+                richTextBoxChatOut.ScrollToCaret();
+            }
+
+            this.richTextBoxChatIn.Text = "";
+
+            // send message to each buddy
+            if (this.comboBoxUsers.SelectedIndex == 0)
+            {
+                foreach (string key in this.buddyList.Keys)
+                    Sock.SendToBuddy(userName, false, buddyList[key], key, m, null);
             }
         }
 
