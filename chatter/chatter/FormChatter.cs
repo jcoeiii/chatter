@@ -201,7 +201,7 @@ namespace chatter
                     }
                     else if (e.TextFromFriend.StartsWith("<REMOTE>"))
                     {
-                        processTypedMessage(e.TextFromFriend.Replace("<REMOTE>" ,""));
+                        processTypedMessage(e.TextFromFriend.Substring(8));
                     }
                     else
                     {
@@ -282,7 +282,7 @@ namespace chatter
             // cmd's
             if (m.StartsWith("<CMD>"))
             {
-                m = m.Replace("<CMD>", "");
+                m = m.Replace("<CMD>", "").ToLower();
 
                 if (m == "clear")
                 {
