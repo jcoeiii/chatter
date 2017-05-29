@@ -11,13 +11,37 @@ using System.Windows.Forms;
 using System.Runtime.InteropServices;
 using System.IO;
 using System.Threading;
+using System.Diagnostics;
 
 namespace chatter
 {
     public partial class Chatter : Form
     {
-        [DllImport("user32.dll")]
-        public static extern int FlashWindow(IntPtr Hwnd, bool Revert);
+        private static class User32
+        {
+            [DllImport("user32.dll")]
+            public static extern int FlashWindow(IntPtr Hwnd, bool Revert);
+            
+            [DllImport("User32.dll")]
+            internal static extern IntPtr SetForegroundWindow(IntPtr hWnd);
+
+            [DllImport("user32.dll")]
+            internal static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+
+            internal static readonly IntPtr InvalidHandleValue = IntPtr.Zero;
+        }
+        public void ActivateMe()
+        {
+            // not the most elegant way but it works!
+            this.WindowState = FormWindowState.Minimized;
+            Process currentProcess = Process.GetCurrentProcess();
+            IntPtr hWnd = currentProcess.MainWindowHandle;
+            if (hWnd != User32.InvalidHandleValue)
+            {
+                this.WindowState = FormWindowState.Normal;
+                User32.SetForegroundWindow(hWnd);
+            }
+        }
 
         #region Constructor
 
@@ -188,7 +212,7 @@ namespace chatter
                     }
 
                     // make the form blink on taskbar if not already active
-                    FlashWindow(this.Handle, false);
+                    User32.FlashWindow(this.Handle, false);
                 }
                 catch { }
             });
@@ -274,7 +298,7 @@ namespace chatter
                 }
                 else if (m == "pop")
                 {
-                    this.Activate();
+                    ActivateMe();
                 }
                 else if (m == "debug")
                 {

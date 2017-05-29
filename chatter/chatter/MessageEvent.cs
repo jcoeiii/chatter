@@ -25,58 +25,83 @@ namespace chatter
             if (data != null && data.Contains("|"))
             {
                 data = data.Trim(); // important trim
-                int loc = data.IndexOf('|');
-                if (loc != -1)
+                int loc, loc1, loc2, loc3;
+
+                if (find4backwards(data, out loc, out loc1, out loc2, out loc3))
                 {
-                    int loc1 = data.IndexOf('|', loc + 1);
-                    if (loc1 > 0)
+                    id = data.Substring(loc + 1, loc1 - loc - 1);
+                    friendName = data.Substring(loc1 + 1, loc2 - loc1 - 1);
+                    friendIP = data.Substring(loc2 + 1, loc3 - loc2 - 1);
+                    textFromFriend = data.Substring(loc3 + 1, data.Length - loc3 - 1);
+                    checksum = Sock.Checksum(textFromFriend.Replace("<EOF>", ""));
+                    
+                    // sanity checks
+                    if (friendIP.Split('.').Count() != 4 || id.Length > 4 || id.Length == 0)
                     {
-                        int loc2 = data.IndexOf('|', loc1 + 1);
-                        if (loc2 > 0)
+                        valid = false;
+                    }
+                    else if (textFromFriend.EndsWith("<EOF>"))
+                    {
+                        if (textFromFriend.StartsWith("<OBJECT>FILE"))
                         {
-                            int loc3 = data.IndexOf('|', loc2 + 1);
-                            if (loc3 > 0)
+                            isFile = true;
+                            try
                             {
-                                id = data.Substring(loc + 1, loc1 - loc - 1);
-                                friendName = data.Substring(loc1 + 1, loc2 - loc1 - 1);
-                                friendIP = data.Substring(loc2 + 1, loc3 - loc2 - 1);
-                                textFromFriend = data.Substring(loc3 + 1, data.Length - loc3 - 1);
-
-                                checksum = Sock.Checksum(textFromFriend.Replace("<EOF>", ""));
-                                
-                                if (textFromFriend.EndsWith("<EOF>"))
-                                {
-                                    if (textFromFriend.StartsWith("<OBJECT>FILE"))
-                                    {
-                                        isFile = true;
-                                        try
-                                        {
-                                            string[] splitObj = textFromFriend.Split('*');
-                                            this.chunkId = Convert.ToInt32(splitObj[1]);
-                                            this.fileName = splitObj[2];
-                                            this.fileData = (splitObj[3].Substring(0, splitObj[3].Length - 4 - 1));
-                                            valid = true;
-                                        }
-                                        catch
-                                        {
-                                            valid = false;
-                                        }
-                                        textFromFriend = textFromFriend.Replace("<EOF>", "");
-                                        return;
-                                    }
-
-                                    textFromFriend = textFromFriend.Replace("<EOF>", "");
-                                    valid = true;
-                                }
-                                else
-                                {
-                                    textFromFriend = "";
-                                }
+                                string[] splitObj = textFromFriend.Split('*');
+                                this.chunkId = Convert.ToInt32(splitObj[1]);
+                                this.fileName = splitObj[2];
+                                this.fileData = (splitObj[3].Substring(0, splitObj[3].Length - 4 - 1));
+                                valid = true;
                             }
+                            catch
+                            {
+                                valid = false;
+                            }
+                            textFromFriend = textFromFriend.Replace("<EOF>", "");
+                            return;
                         }
+
+                        textFromFriend = textFromFriend.Replace("<EOF>", "");
+                        valid = true;
+                    }
+                    else
+                    {
+                        textFromFriend = "";
                     }
                 }
             }
+        }
+
+        //     loc        loc1       loc2       loc3
+        //      |    id    | from name| from IP  | text data message       with EOF termination
+        private bool find4backwards(string msg, out int loc, out int loc1, out int loc2, out int loc3)
+        {
+            loc = -1;
+            loc1 = -1;
+            loc2 = -1;
+            loc3 = msg.IndexOf("<EOF>");
+            if (loc3 > 0)
+            {
+                for (; loc3 > 0; loc3--)
+                    if (msg[loc3] == '|')
+                    {
+                        for (loc2 = loc3 - 1; loc2 > 0; loc2--)
+                            if (msg[loc2] == '|')
+                            {
+                                for (loc1 = loc2 - 1; loc1 > 0; loc1--)
+                                    if (msg[loc1] == '|')
+                                    {
+                                        for (loc = loc1 - 1; loc >= 0; loc--)
+                                            if (msg[loc] == '|')
+                                                return true;
+                                        break;
+                                    }
+                                break;
+                            }
+                        break;
+                    }
+            }
+            return false;
         }
 
         public bool Valid { get { return this.valid; } }
