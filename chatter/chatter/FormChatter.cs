@@ -257,12 +257,13 @@ namespace chatter
 
         #region Form Control Events
 
-        private void richTextBoxChat_KeyPress(object sender, KeyPressEventArgs e)
+        private void richTextBoxChatIn_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyChar.Equals((char)Keys.Enter))
+            if (e.KeyCode.Equals(Keys.Enter))
             {
                 if (Control.ModifierKeys != Keys.Shift)
                 {
+                    e.Handled = true;
                     Sock.MyTypingStatus(false);
                     processTypedMessage(this.richTextBoxChatIn.Text);
                 }
