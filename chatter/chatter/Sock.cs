@@ -906,9 +906,10 @@ namespace chatter
         static public void debug(string msg)
         {
 #if (!DEBUG)
-            if (InDebug && _debug != null)
+            if (InDebug)
 #endif
-                _debug.InjectTestMessage("{ " + msg + " }");
+                if (_debug != null)
+                    _debug.InjectTestMessage("{ " + msg + " }");
         }
 
         #endregion
